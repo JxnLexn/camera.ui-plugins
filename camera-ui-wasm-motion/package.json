@@ -31,7 +31,7 @@
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "25.9.3",
-    "@typescript-eslint/parser": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.1",
     "assemblyscript": "^0.28.19",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
@@ -43,7 +43,7 @@
     "set-interval-async": "^3.0.3",
     "sharp": "^0.35.1",
     "typescript": "5.9.3",
-    "typescript-eslint": "^8.61.0",
+    "typescript-eslint": "^8.61.1",
     "updates": "^17.18.0"
   },
   "bugs": {
