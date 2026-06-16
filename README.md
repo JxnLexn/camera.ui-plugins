@@ -1,2 +1,0 @@
-# plugins
-camera.ui plugins

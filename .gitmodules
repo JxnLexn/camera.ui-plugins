@@ -1,0 +1,6 @@
+[submodule "externals/cli"]
+	path = externals/cli
+	url = https://github.com/cameraui/cli.git
+[submodule "externals/sdk"]
+	path = externals/sdk
+	url = https://github.com/cameraui/sdk.git

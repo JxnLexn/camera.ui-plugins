@@ -1,0 +1,25 @@
+{
+  "name": "@camera.ui/plugins-monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "camera.ui plugins monorepo",
+  "type": "module",
+  "scripts": {
+  },
+  "homepage": "https://github.com/cameraui/plugins#readme",
+  "bugs": {
+    "url": "https://github.com/cameraui/plugins/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cameraui/plugins.git"
+  },
+  "license": "MIT",
+  "author": "seydx",
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "tsx": "^4.22.4",
+    "typescript": "5.9.3",
+    "updates": "^17.18.0"
+  }
+}
