@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      node: ${{ steps.select.outputs.node }}
+      python: ${{ steps.select.outputs.python }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            shared-node:
+              - 'externals/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'tsconfig.json'
+              - 'scripts/**'
+              - '.github/workflows/ci.yml'
+              - '.github/scripts/select-plugins.mjs'
+            shared-python:
+              - 'requirements.txt'
+              - '.github/workflows/ci.yml'
+              - '.github/scripts/select-plugins.mjs'
+            camera-ui-homekit: ['camera-ui-homekit/**']
+            camera-ui-onvif: ['camera-ui-onvif/**']
+            camera-ui-ring: ['camera-ui-ring/**']
+            camera-ui-pamdiff: ['camera-ui-pamdiff/**']
+            camera-ui-rust-motion: ['camera-ui-rust-motion/**']
+            camera-ui-smtp: ['camera-ui-smtp/**']
+            camera-ui-tuya: ['camera-ui-tuya/**']
+            camera-ui-wasm-motion: ['camera-ui-wasm-motion/**']
+            camera-ui-audio-yamnet: ['camera-ui-audio-yamnet/**']
+            camera-ui-coreml: ['camera-ui-coreml/**']
+            camera-ui-opencl: ['camera-ui-opencl/**']
+            camera-ui-opencv: ['camera-ui-opencv/**']
+            camera-ui-wyze: ['camera-ui-wyze/**']
+      - id: select
+        env:
+          CHANGED: ${{ steps.filter.outputs.changes }}
+        run: node .github/scripts/select-plugins.mjs
+
+  externals:
+    needs: changes
+    if: needs.changes.outputs.node != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Init submodules (cli + sdk)
+        run: git submodule update --init --depth 1 externals/cli externals/sdk
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Build shared externals (cli + sdk)
+        run: npm run build:externals
+      - name: Package externals dist
+        run: tar czf externals-dist.tar.gz externals/cli/dist externals/sdk/node/dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: externals-dist
+          path: externals-dist.tar.gz
+          retention-days: 1
+
+  node-plugins:
+    needs: [changes, externals]
+    if: needs.changes.outputs.node != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.changes.outputs.node) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Init submodules
+        run: git submodule update --init --depth 1 externals/cli externals/sdk ${{ matrix.externals }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: externals-dist
+      - name: Restore externals dist
+        run: tar xzf externals-dist.tar.gz
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Install
+        run: npm --prefix ${{ matrix.plugin }} install --ignore-scripts
+
+      - name: Build
+        run: npm --prefix ${{ matrix.plugin }} run build
+
+      - name: Lint
+        run: npm --prefix ${{ matrix.plugin }} run lint
+
+  python-plugins:
+    needs: changes
+    if: needs.changes.outputs.python != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: ${{ fromJSON(needs.changes.outputs.python) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install deps (shared tools + plugin-specific)
+        run: pip install -r requirements.txt -r ${{ matrix.plugin }}/requirements.txt
+
+      - name: Lint (ruff)
+        run: cd ${{ matrix.plugin }} && ruff check
+
+      - name: Type-check (mypy)
+        run: cd ${{ matrix.plugin }} && mypy src

@@ -1,0 +1,58 @@
+audio-yamnet:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-audio-yamnet/**'
+coreml:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-coreml/**'
+homekit:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-homekit/**'
+onvif:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-onvif/**'
+opencl:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-opencl/**'
+opencv:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-opencv/**'
+pamdiff:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-pamdiff/**'
+ring:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-ring/**'
+rust-motion:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-rust-motion/**'
+smtp:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-smtp/**'
+tuya:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-tuya/**'
+wasm-motion:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-wasm-motion/**'
+wyze:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-wyze/**'
+
+# Cross-cutting labels.
+externals:
+  - changed-files:
+      - any-glob-to-any-file: 'externals/**'
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file: '**/package.json'
+      - any-glob-to-any-file: '**/package-lock.json'
+      - any-glob-to-any-file: '**/requirements.txt'
+
+workflow:
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file: '**/*.md'
