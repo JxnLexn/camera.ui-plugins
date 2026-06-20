@@ -21,14 +21,14 @@
     "update": "updates --update ./"
   },
   "dependencies": {
-    "@camera.ui/sdk": "file:../externals/sdk/node",
     "@seydx/rtsp": "^0.0.7",
     "eufy-security-client": "^4.0.0"
   },
   "devDependencies": {
-    "@camera.ui/cli": "file:../externals/cli",
+    "@camera.ui/cli": "^0.0.54",
+    "@camera.ui/sdk": "^0.0.7",
     "@stylistic/eslint-plugin": "^5.10.0",
-    "@types/node": "25.9.3",
+    "@types/node": "26.0.0",
     "@typescript-eslint/parser": "^8.61.1",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",

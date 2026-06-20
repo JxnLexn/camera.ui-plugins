@@ -5,6 +5,7 @@
   "description": "camera.ui plugins monorepo",
   "type": "module",
   "scripts": {
+    "audit": "npm audit fix && tsx ./scripts/audit.ts",
     "build": "tsx ./scripts/build.ts",
     "build:externals": "npm --prefix externals/cli ci --ignore-scripts && npm --prefix externals/cli run build && npm --prefix externals/sdk/node ci --ignore-scripts && npm --prefix externals/sdk/node run build",
     "bundle": "cross-env MODE=development tsx ./scripts/bundle.ts",
@@ -26,7 +27,7 @@
   "license": "MIT",
   "author": "seydx",
   "devDependencies": {
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.0.0",
     "chalk": "^5.6.2",
     "cross-env": "^10.1.0",
     "tsx": "^4.22.4",

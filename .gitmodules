@@ -1,9 +1,3 @@
-[submodule "externals/cli"]
-	path = externals/cli
-	url = https://github.com/cameraui/cli.git
-[submodule "externals/sdk"]
-	path = externals/sdk
-	url = https://github.com/cameraui/sdk.git
 [submodule "externals/onvif"]
 	path = externals/onvif
 	url = https://github.com/seydx/onvif
