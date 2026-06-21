@@ -4,6 +4,9 @@ audio-yamnet:
 coreml:
   - changed-files:
       - any-glob-to-any-file: 'camera-ui-coreml/**'
+eufy:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-eufy/**'
 homekit:
   - changed-files:
       - any-glob-to-any-file: 'camera-ui-homekit/**'
