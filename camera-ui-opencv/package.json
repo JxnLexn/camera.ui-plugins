@@ -1,7 +1,7 @@
 {
   "displayName": "OpenCV",
   "name": "@camera.ui/camera-ui-opencv",
-  "version": "0.0.28",
+  "version": "0.0.29",
   "description": "Advanced motion detection powered by OpenCV library. Reliable movement tracking with customizable sensitivity.",
   "author": "seydx (https://github.com/cameraui/plugins)",
   "main": "./bundle/dist/main.py",
