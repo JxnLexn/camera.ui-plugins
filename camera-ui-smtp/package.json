@@ -3,8 +3,9 @@
   "name": "@camera.ui/camera-ui-smtp",
   "version": "0.0.2",
   "description": "Efficient SMTP-based motion detection system. Captures and delivers alerts through email services with customizable triggers and seamless integration for continuous monitoring.",
-  "type": "module",
+  "author": "seydx (https://github.com/cameraui/plugins)",
   "main": "./bundle/dist/index.js",
+  "type": "module",
   "scripts": {
     "build": "rimraf dist && tsc",
     "bundle": "npm run format && npm run lint:fix && npm run build && cui bundle",
@@ -40,12 +41,22 @@
     "typescript-eslint": "^8.62.0",
     "updates": "^17.18.0"
   },
+  "bugs": {
+    "url": "https://github.com/cameraui/plugins/issues"
+  },
   "engines": {
     "camera.ui": ">=0.0.50",
-    "node": ">=18.20.8"
+    "node": ">=22.0.0"
   },
+  "homepage": "https://github.com/cameraui/plugins/tree/main/camera-ui-smtp#readme",
   "keywords": [
-    "camera-ui-plugin"
+    "camera-ui-plugin",
+    "smtp"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cameraui/plugins.git",
+    "directory": "camera-ui-smtp"
+  }
 }
