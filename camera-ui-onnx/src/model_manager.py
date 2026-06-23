@@ -58,12 +58,23 @@ class ModelManager:
         path = os.path.join(self.model_path, rel)
 
         providers = list(self._get_providers())
-        session: ort.InferenceSession = await asyncio.to_thread(
-            ort.InferenceSession, path, providers=providers
-        )
+        session = await self._create_session(model_name, path, providers)
         active = session.get_providers()
         self.logger.success(f"Loaded model: {model_name} ({active[0] if active else 'CPUExecutionProvider'})")
         return session
+
+    async def _create_session(
+        self, model_name: str, path: str, providers: ProviderList
+    ) -> ort.InferenceSession:
+        try:
+            return await asyncio.to_thread(ort.InferenceSession, path, providers=list(providers))
+        except Exception as error:
+            if list(providers) == ["CPUExecutionProvider"]:
+                raise
+            self.logger.warn(
+                f"Accelerated provider unavailable for {model_name} ({error}); falling back to CPU"
+            )
+            return await asyncio.to_thread(ort.InferenceSession, path, providers=["CPUExecutionProvider"])
 
     async def _download_file(self, url: str, filename: str) -> None:
         fullpath = os.path.join(self.model_path, filename)
