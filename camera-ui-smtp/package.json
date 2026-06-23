@@ -1,7 +1,7 @@
 {
   "displayName": "SMTP",
   "name": "@camera.ui/camera-ui-smtp",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Efficient SMTP-based motion detection system. Captures and delivers alerts through email services with customizable triggers and seamless integration for continuous monitoring.",
   "author": "seydx (https://github.com/cameraui/plugins)",
   "main": "./bundle/dist/index.js",
