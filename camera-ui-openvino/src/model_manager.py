@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import os
 from collections.abc import Callable
-from typing import Any
 
 import aiohttp
 import openvino as ov
@@ -16,6 +15,7 @@ from defaults import (
     MODEL_LFS_URL,
     model_version,
 )
+from infer_pool import PooledModel
 
 
 class ModelManager:
@@ -24,7 +24,7 @@ class ModelManager:
         self.logger = logger
         self._get_device = get_device
         self._core = ov.Core()
-        self._load_tasks: dict[str, asyncio.Task[Any]] = {}
+        self._load_tasks: dict[str, asyncio.Task[PooledModel]] = {}
 
     def reset(self) -> None:
         """Drop cached load tasks so models are rebuilt (e.g. after a device change)."""
@@ -41,14 +41,14 @@ class ModelManager:
             base = f"{model_name}/{model_name}"
         return f"{base}.xml", f"{base}.bin"
 
-    async def ensure_model(self, model_name: str) -> ov.CompiledModel:
+    async def ensure_model(self, model_name: str) -> PooledModel:
         task = self._load_tasks.get(model_name)
         if task is None:
             task = asyncio.create_task(self._load(model_name))
             self._load_tasks[model_name] = task
         return await task
 
-    async def _load(self, model_name: str) -> ov.CompiledModel:
+    async def _load(self, model_name: str) -> PooledModel:
         xml_rel, bin_rel = self._rel_files(model_name)
         # .xml is plain text (raw endpoint); .bin holds the weights (Git LFS endpoint).
         await self._download_file(f"{MODEL_BASE_URL}/{xml_rel}", xml_rel)
@@ -60,7 +60,7 @@ class ModelManager:
         self.logger.success(f"Loaded model: {model_name} ({used})")
         return compiled
 
-    def _compile(self, xml_path: str, device: str) -> tuple[ov.CompiledModel, str]:
+    def _compile(self, xml_path: str, device: str) -> tuple[PooledModel, str]:
         model = self._core.read_model(xml_path)  # auto-loads sibling .bin
         # Try the requested device, then fall back so a missing GPU/NPU never breaks loading.
         tried: list[str] = []
@@ -69,7 +69,9 @@ class ModelManager:
                 continue
             tried.append(dev)
             try:
-                return self._core.compile_model(model, dev), dev
+                # PooledModel wraps the compiled model with a pool of infer requests so
+                # concurrent detection across cameras can't hit "Infer Request is busy".
+                return PooledModel(self._core.compile_model(model, dev)), dev
             except Exception as e:
                 self.logger.log(f"compile_model on {dev} failed ({e}); trying fallback")
         raise RuntimeError(f"Could not compile model on any device (tried {tried})")

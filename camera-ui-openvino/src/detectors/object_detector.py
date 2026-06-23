@@ -10,6 +10,7 @@ from camera_ui_sdk import Detection, DetectionLabel, ImageMetadata, VideoFrameDa
 from PIL import Image
 
 from defaults import OBJECT_LABELS
+from infer_pool import AsyncInferPool
 
 if TYPE_CHECKING:
     from model_manager import ModelManager
@@ -33,6 +34,7 @@ class ObjectDetector:
 
         self.closed = False
         self._init_task: asyncio.Task[None] | None = None
+        self._pool: AsyncInferPool | None = None
 
     @property
     def input_width(self) -> int:
@@ -59,6 +61,7 @@ class ObjectDetector:
             ps = self.model.input(0).get_partial_shape()
             self.input_size = (ps[3].get_length(), ps[2].get_length())
             self.labels = dict(OBJECT_LABELS)
+            self._pool = AsyncInferPool(self.model.compiled, asyncio.get_running_loop())
             self.initialized = True
         except Exception as e:
             self.manager.logger.error(f"Failed to initialize object detector: {e}")
@@ -68,11 +71,12 @@ class ObjectDetector:
     async def detect(
         self, image: Image.Image, confidence_threshold: float = 0.5
     ) -> list[tuple[int, float, tuple[float, float, float, float]]]:
-        if not self.initialized or self.model is None:
+        if not self.initialized or self.model is None or self._pool is None:
             return []
 
-        results = await asyncio.get_event_loop().run_in_executor(self.executor, self._predict, image)
-        return _parse_yolov9(results, confidence_threshold)
+        tensor = await asyncio.get_event_loop().run_in_executor(self.executor, self._preprocess, image)
+        result = await self._pool.infer([tensor], parse=lambda out: _parse_yolov9(out[0][0], confidence_threshold))
+        return cast("list[tuple[int, float, tuple[float, float, float, float]]]", result)
 
     async def detect_frame(
         self, frame: VideoFrameData, confidence_threshold: float = 0.5
@@ -141,16 +145,18 @@ class ObjectDetector:
             self._init_task = None
         self.initialized = False
         self.model = None
+        if self._pool:
+            self._pool.close()
+            self._pool = None
         if self.executor:
             self.executor.shutdown(wait=False)
             self.executor = None
 
-    def _predict(self, image: Image.Image) -> np.ndarray[Any, Any]:
-        # HWC uint8 (0-255) -> NCHW float32 (0-1), RGB
+    def _preprocess(self, image: Image.Image) -> np.ndarray[Any, Any]:
+        # HWC uint8 (0-255) -> NCHW float32 (0-1), RGB. Runs on the executor; the
+        # inference itself goes through the AsyncInferQueue (see detect()).
         arr = np.asarray(image, dtype=np.float32).transpose(2, 0, 1)
-        arr = np.ascontiguousarray(np.expand_dims(arr, axis=0)) / 255.0
-        result = self.model([arr])
-        return cast("np.ndarray[Any, Any]", result[self.model.output(0)][0])
+        return np.ascontiguousarray(np.expand_dims(arr, axis=0)) / 255.0
 
 
 def _parse_yolov9(
