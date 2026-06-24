@@ -1,89 +1,58 @@
 from __future__ import annotations
 
 import asyncio
-import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
-import aiohttp
 import ncnn
-from camera_ui_sdk import LoggerService, PluginAPI
+from camera_ui_ml import BaseModelManager, InferenceBackend
+from camera_ui_sdk import LoggerService
 
 from defaults import MODEL_BASE_URL, MODEL_LFS_URL, model_version
+from inference import NcnnBackend
 
 
-class ModelManager:
-    def __init__(self, api: PluginAPI, logger: LoggerService, get_use_vulkan: Callable[[], bool]) -> None:
-        self.model_path = os.path.join(f"{api.storagePath}/models/{model_version}")
-        self.logger = logger
+class NcnnModelManager(BaseModelManager):
+    def __init__(
+        self,
+        storage_path: str,
+        logger: LoggerService,
+        get_use_vulkan: Callable[[], bool],
+    ) -> None:
+        super().__init__(storage_path, logger, model_version)
         self._get_use_vulkan = get_use_vulkan
-        self._load_tasks: dict[str, asyncio.Task[Any]] = {}
 
-    def reset(self) -> None:
-        """Drop cached load tasks so models are rebuilt (e.g. after a Vulkan toggle)."""
-        self._load_tasks.clear()
-
-    async def ensure_model(self, model_name: str) -> ncnn.Net:
-        task = self._load_tasks.get(model_name)
-        if task is None:
-            task = asyncio.create_task(self._load(model_name))
-            self._load_tasks[model_name] = task
-        return await task
-
-    async def _load(self, model_name: str) -> ncnn.Net:
+    def model_files(self, model_name: str) -> Mapping[str, tuple[str, str]]:
         param_rel = f"{model_name}/{model_name}.ncnn.param"
         bin_rel = f"{model_name}/{model_name}.ncnn.bin"
-        # .param is plain text (raw endpoint); .bin holds the weights (Git LFS endpoint).
-        await self._download_file(f"{MODEL_BASE_URL}/{param_rel}", param_rel)
-        await self._download_file(f"{MODEL_LFS_URL}/{bin_rel}", bin_rel)
+        return {
+            "param": (f"{MODEL_BASE_URL}/{param_rel}", param_rel),
+            "bin": (f"{MODEL_LFS_URL}/{bin_rel}", bin_rel),
+        }
 
-        param_path = os.path.join(self.model_path, param_rel)
-        bin_path = os.path.join(self.model_path, bin_rel)
+    async def build_backend(self, model_name: str, paths: Mapping[str, str]) -> InferenceBackend:
         use_vulkan = self._get_use_vulkan()
-        net: ncnn.Net = await asyncio.to_thread(self._build, param_path, bin_path, use_vulkan)
-        self.logger.success(f"Loaded model: {model_name} (vulkan={use_vulkan})")
-        return net
+        net = await asyncio.to_thread(self._build, paths["param"], paths["bin"], use_vulkan)
+        size = _input_size(paths["param"])
+        # ncnn silently runs on CPU if Vulkan was requested but no GPU is present.
+        device = "Vulkan (GPU)" if use_vulkan and ncnn.get_gpu_count() > 0 else "CPU"
+        self.logger.success(f"Loaded model: {model_name} ({device})")
+        return NcnnBackend(net, size, device)
 
     @staticmethod
-    def _build(param_path: str, bin_path: str, use_vulkan: bool) -> ncnn.Net:
+    def _build(param_path: str, bin_path: str, use_vulkan: bool) -> Any:
         net = ncnn.Net()
         net.opt.use_vulkan_compute = use_vulkan
         net.load_param(param_path)
         net.load_model(bin_path)
         return net
 
-    async def _download_file(self, url: str, filename: str) -> None:
-        fullpath = os.path.join(self.model_path, filename)
-        if os.path.isfile(fullpath):
-            return
 
-        tmp = fullpath + ".tmp"
-        os.makedirs(os.path.dirname(fullpath), exist_ok=True)
-
-        short_name = os.path.basename(filename)
-        self.logger.log(f"Downloading {short_name}...")
-
-        async with aiohttp.ClientSession() as session, session.get(url) as response:
-            if response.status < 200 or response.status >= 300:
-                raise Exception(f"Error downloading {url}: {response.status}")
-
-            total_size = int(response.headers.get("content-length", 0))
-            downloaded = 0
-            last_percent = 0
-
-            with open(tmp, "wb") as f:
-                async for chunk in response.content.iter_chunked(1024 * 1024):
-                    if chunk:
-                        downloaded += len(chunk)
-                        f.write(chunk)
-
-                        if total_size > 1024 * 1024:
-                            percent = min(100, (downloaded * 100) // total_size)
-                            if percent >= last_percent + 25 and percent <= 100:
-                                last_percent = (percent // 25) * 25
-                                self.logger.log(f"Downloading {short_name}... {last_percent}%")
-
-            size_mb = downloaded / (1024 * 1024)
-            self.logger.log(f"Downloaded {short_name} ({size_mb:.1f} MB)")
-
-        os.rename(tmp, fullpath)
+def _input_size(param_path: str) -> tuple[int, int]:
+    # The Input layer encodes dims as `0=W 1=H`; parse them from the .param text.
+    with open(param_path) as handle:
+        for line in handle:
+            if line.startswith("Input"):
+                params = dict(p.split("=", 1) for p in line.split() if "=" in p)
+                return (int(params.get("0", 0)), int(params.get("1", 0)))
+    return (0, 0)
