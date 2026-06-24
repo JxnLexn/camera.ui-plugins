@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 import asyncio
-import io
 import platform
 from typing import Any
 
 import onnxruntime as ort
+from camera_ui_ml import (
+    BoxDetector,
+    Embedder,
+    PlateOcr,
+    crop_rgb,
+    decode_image,
+    normalize_box,
+    scale_box,
+)
+from camera_ui_ml.detectors.clip import ClipEncoder
 from camera_ui_sdk import (
     API_EVENT,
     BasePlugin,
@@ -29,10 +38,10 @@ from camera_ui_sdk import (
     PluginAPI,
     VideoFrameData,
 )
-from PIL import Image
 
 from defaults import (
     CLIP_VISION_MODELS,
+    DEFAULT_CLIP_TEXT,
     DEFAULT_CLIP_VISION,
     DEFAULT_EXECUTION_PROVIDER,
     DEFAULT_FACE_DETECTOR,
@@ -42,18 +51,18 @@ from defaults import (
     DEFAULT_OCR,
     EXECUTION_PROVIDERS,
     FACE_DETECTOR_MODELS,
+    FACE_EMBEDDER_INPUT_SIZE,
     FACE_EMBEDDER_MODELS,
     LPD_DETECTOR_MODELS,
     OBJECT_MODELS,
+    OCR_ALPHABET,
+    OCR_INPUT_HEIGHT,
+    OCR_INPUT_WIDTH,
+    OCR_MAX_SLOTS,
     OCR_MODELS,
+    OCR_PAD_CHAR,
 )
-from detectors.clip_encoder import ClipEncoder
-from detectors.face_detector import FaceDetector
-from detectors.face_embedder import FaceEmbedder
-from detectors.object_detector import ObjectDetector
-from detectors.plate_detector import PlateDetector
-from detectors.plate_ocr import PlateOCR
-from model_manager import ModelManager, ProviderList
+from model_manager import OnnxModelManager, ProviderList
 from sensors.clip_sensor import ONNXClipSensor
 from sensors.face_sensor import ONNXFaceSensor
 from sensors.lpd_sensor import ONNXLPDSensor
@@ -69,13 +78,13 @@ class ONNXPlugin(
 ):
     def __init__(self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage[Any]) -> None:
         super().__init__(logger, api, storage)
-        self.model_manager = ModelManager(api, logger, self._resolve_providers)
+        self.model_manager = OnnxModelManager(api.storagePath, logger, self._resolve_provider_lists)
 
-        self.object_detectors: dict[str, ObjectDetector] = {}
-        self.face_detectors: dict[str, FaceDetector] = {}
-        self.face_embedders: dict[str, FaceEmbedder] = {}
-        self.plate_detectors: dict[str, PlateDetector] = {}
-        self.ocr_models: dict[str, PlateOCR] = {}
+        self.object_detectors: dict[str, BoxDetector] = {}
+        self.face_detectors: dict[str, BoxDetector] = {}
+        self.face_embedders: dict[str, Embedder] = {}
+        self.plate_detectors: dict[str, BoxDetector] = {}
+        self.ocr_models: dict[str, PlateOcr] = {}
         self.clip_encoders: dict[str, ClipEncoder] = {}
 
         self._sensors: dict[str, dict[str, Any]] = {}
@@ -101,47 +110,71 @@ class ONNXPlugin(
                 "onSet": self._on_provider_change,
             },
             {
-                "type": "number",
-                "key": "device_id",
-                "title": "CUDA Device ID",
-                "description": "GPU device index used by the CUDA execution provider.",
+                "type": "string",
+                "key": "device_ids",
+                "title": "CUDA Device IDs",
+                "description": (
+                    'GPU index(es) for CUDA, comma-separated for multi-GPU (e.g. "0" or "0,1"). '
+                    "Each device gets its own inference session so detection runs in parallel across GPUs."
+                ),
                 "store": True,
-                "defaultValue": 0,
-                "minimum": 0,
-                "maximum": 16,
-                "step": 1,
+                "defaultValue": "0",
                 "onSet": self._on_provider_change,
+            },
+            {
+                "type": "string",
+                "key": "active_hardware",
+                "title": "Active Hardware",
+                "description": "Hardware currently running inference across loaded models (read-only).",
+                "readonly": True,
+                "store": False,
+                "onGet": self._active_hardware,
             },
         ]
 
-    def _resolve_providers(self) -> ProviderList:
-        pref = self.storage.values.get("execution_provider", DEFAULT_EXECUTION_PROVIDER)
-        try:
-            device_id = int(self.storage.values.get("device_id", 0) or 0)
-        except (TypeError, ValueError):
-            device_id = 0
+    def _active_hardware(self) -> str:
+        backends = [
+            detector.backend.device
+            for detector in (
+                *self.object_detectors.values(),
+                *self.face_detectors.values(),
+                *self.plate_detectors.values(),
+                *self.face_embedders.values(),
+                *self.ocr_models.values(),
+            )
+            if detector.backend is not None
+        ]
+        backends += [enc.vision.device for enc in self.clip_encoders.values() if enc.vision is not None]
+        if not backends:
+            return "No models loaded yet"
+        return ", ".join(dict.fromkeys(backends))
 
+    def _device_ids(self) -> list[int]:
+        raw = str(self.storage.values.get("device_ids", "0"))
+        ids = [int(part.strip()) for part in raw.split(",") if part.strip().isdigit()]
+        return ids or [0]
+
+    def _resolve_provider_lists(self) -> list[ProviderList]:
+        pref = self.storage.values.get("execution_provider", DEFAULT_EXECUTION_PROVIDER)
         system = platform.system()  # "Darwin" / "Linux" / "Windows"
         machine = platform.machine()
+        available: set[str] = set(ort.get_available_providers())
 
-        candidates: list[str | tuple[str, dict[str, Any]]] = []
-        if pref == "coreml":
-            candidates.append("CoreMLExecutionProvider")
-        elif pref == "cuda":
-            candidates.append(("CUDAExecutionProvider", {"device_id": device_id}))
-        elif pref == "auto":
-            if system == "Darwin":
-                candidates.append("CoreMLExecutionProvider")
-            elif system in ("Linux", "Windows") and machine in ("x86_64", "AMD64"):
-                candidates.append(("CUDAExecutionProvider", {"device_id": device_id}))
-        # pref == "cpu" -> no accelerator, CPU only
+        x86 = machine in ("x86_64", "AMD64")
+        use_cuda = pref == "cuda" or (pref == "auto" and system in ("Linux", "Windows") and x86)
+        use_coreml = pref == "coreml" or (pref == "auto" and system == "Darwin")
 
-        available: set[str] = set(ort.get_available_providers())  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-        providers: list[str | tuple[str, dict[str, Any]]] = [
-            p for p in candidates if (p[0] if isinstance(p, tuple) else p) in available
-        ]
-        providers.append("CPUExecutionProvider")
-        return providers
+        if use_cuda and "CUDAExecutionProvider" in available:
+            return [
+                [
+                    ("CUDAExecutionProvider", {"device_id": device_id}),
+                    "CPUExecutionProvider",
+                ]
+                for device_id in self._device_ids()
+            ]
+        if use_coreml and "CoreMLExecutionProvider" in available:
+            return [["CoreMLExecutionProvider", "CPUExecutionProvider"]]
+        return [["CPUExecutionProvider"]]
 
     async def _on_provider_change(self, new_value: object, old_value: object) -> None:
         if new_value == old_value:
@@ -186,7 +219,6 @@ class ONNXPlugin(
         self.clip_encoders.clear()
 
     async def _on_start(self) -> None:
-        # Preload CLIP models so the first semantic search is instant
         asyncio.create_task(self._preload_clip())
 
     async def _preload_clip(self) -> None:
@@ -237,42 +269,56 @@ class ONNXPlugin(
 
         self._sensors[camera.id] = sensors
 
-    async def get_object_detector(self, model_name: str) -> ObjectDetector:
+    async def get_object_detector(self, model_name: str) -> BoxDetector:
         detector = self.object_detectors.get(model_name)
         if not detector:
-            detector = ObjectDetector(self.model_manager)
+            detector = BoxDetector(self.model_manager, self.logger, name="object detector", multiclass=True)
             self.object_detectors[model_name] = detector
             await detector.initialize(model_name)
         return detector
 
-    async def get_face_detector(self, model_name: str) -> FaceDetector:
+    async def get_face_detector(self, model_name: str) -> BoxDetector:
         detector = self.face_detectors.get(model_name)
         if not detector:
-            detector = FaceDetector(self.model_manager)
+            detector = BoxDetector(self.model_manager, self.logger, name="face detector")
             self.face_detectors[model_name] = detector
             await detector.initialize(model_name)
         return detector
 
-    async def get_face_embedder(self, model_name: str) -> FaceEmbedder:
+    async def get_face_embedder(self, model_name: str) -> Embedder:
         embedder = self.face_embedders.get(model_name)
         if not embedder:
-            embedder = FaceEmbedder(self.model_manager)
+            embedder = Embedder(self.model_manager, self.logger, size=FACE_EMBEDDER_INPUT_SIZE)
             self.face_embedders[model_name] = embedder
             await embedder.initialize(model_name)
         return embedder
 
-    async def get_plate_detector(self, model_name: str) -> PlateDetector:
+    async def get_plate_detector(self, model_name: str) -> BoxDetector:
         detector = self.plate_detectors.get(model_name)
         if not detector:
-            detector = PlateDetector(self.model_manager)
+            detector = BoxDetector(
+                self.model_manager,
+                self.logger,
+                name="plate detector",
+                parse="end2end",
+                threshold=0.25,
+            )
             self.plate_detectors[model_name] = detector
             await detector.initialize(model_name)
         return detector
 
-    async def get_ocr(self, model_name: str) -> PlateOCR:
+    async def get_ocr(self, model_name: str) -> PlateOcr:
         ocr = self.ocr_models.get(model_name)
         if not ocr:
-            ocr = PlateOCR(self.model_manager)
+            ocr = PlateOcr(
+                self.model_manager,
+                self.logger,
+                width=OCR_INPUT_WIDTH,
+                height=OCR_INPUT_HEIGHT,
+                slots=OCR_MAX_SLOTS,
+                alphabet=OCR_ALPHABET,
+                pad_char=OCR_PAD_CHAR,
+            )
             self.ocr_models[model_name] = ocr
             await ocr.initialize(model_name)
         return ocr
@@ -280,9 +326,9 @@ class ONNXPlugin(
     async def get_clip_encoder(self, model_name: str) -> ClipEncoder:
         encoder = self.clip_encoders.get(model_name)
         if not encoder:
-            encoder = ClipEncoder(self.model_manager)
+            encoder = ClipEncoder(self.model_manager, self.logger)
             self.clip_encoders[model_name] = encoder
-            await encoder.initialize(model_name)
+            await encoder.initialize(model_name, DEFAULT_CLIP_TEXT)
         return encoder
 
     async def objectDetectionSettings(self) -> list[JsonSchema] | None:
@@ -307,7 +353,15 @@ class ONNXPlugin(
         if not detector.initialized:
             return None
 
-        detections = await detector.detect_single(image_data, metadata)
+        raw = await detector.detect_single(image_data, metadata)
+        detections: list[Detection] = [
+            {
+                "label": detector.labels.get(cid, "unknown"),
+                "confidence": conf,
+                "box": box,
+            }  # type: ignore[typeddict-item]
+            for cid, conf, box in raw
+        ]
         return {"detected": len(detections) > 0, "detections": detections}
 
     async def detectObjects(
@@ -318,20 +372,15 @@ class ONNXPlugin(
         if not detector.initialized:
             return None
 
-        results = await detector.detect_frame(frame)
+        raw = await detector.detect_frame(frame)
         width, height = frame["width"], frame["height"]
         detections: list[Detection] = [
             {
-                "label": r["label"],
-                "confidence": r["confidence"],
-                "box": {
-                    "x": r["box"][0] / width,
-                    "y": r["box"][1] / height,
-                    "width": (r["box"][2] - r["box"][0]) / width,
-                    "height": (r["box"][3] - r["box"][1]) / height,
-                },
+                "label": detector.labels.get(cid, "unknown"),  # type: ignore[typeddict-item]
+                "confidence": conf,
+                "box": normalize_box(box, width, height),
             }
-            for r in results
+            for cid, conf, box in raw
         ]
         return {"detected": len(detections) > 0, "detections": detections}
 
@@ -370,34 +419,29 @@ class ONNXPlugin(
         if not detector.initialized or not embedder.initialized:
             return None
 
-        face_boxes = await detector.detect_single(image_data, metadata)
-        if not face_boxes:
+        rgb = decode_image(image_data)
+        height, width = int(rgb.shape[0]), int(rgb.shape[1])
+        raw = await detector.detect(rgb)
+        if not raw:
             return {"detected": False, "detections": []}
 
-        image = Image.open(io.BytesIO(image_data)).convert("RGB")
-        width, height = image.size
-        rgb_bytes = image.tobytes()
+        scale_x = width / detector.input_size[0]
+        scale_y = height / detector.input_size[1]
 
         detections: list[FaceDetection] = []
-        for face in face_boxes:
-            x1, y1, x2, y2 = face["box"]
-            embedding = await embedder.embed_from_crop(rgb_bytes, width, height, (x1, y1, x2, y2))
+        for _cid, conf, box in raw:
+            image_box = scale_box(box, scale_x, scale_y)
+            embedding = await embedder.embed(crop_rgb(rgb, image_box))
             detections.append(
                 {
                     "label": "person",
                     "attribute": "face",
-                    "confidence": face["confidence"],
-                    "box": {
-                        "x": x1 / width,
-                        "y": y1 / height,
-                        "width": (x2 - x1) / width,
-                        "height": (y2 - y1) / height,
-                    },
+                    "confidence": conf,
+                    "box": normalize_box(image_box, width, height),
                     "embedding": embedding,
                 }
             )
 
-        image.close()
         return {"detected": len(detections) > 0, "detections": detections}
 
     async def detectFaces(
@@ -412,28 +456,22 @@ class ONNXPlugin(
         if not detector.initialized or not embedder.initialized:
             return None
 
-        face_boxes = await detector.detect_frame(frame)
-        if not face_boxes:
+        raw = await detector.detect_frame(frame)
+        if not raw:
             return {"detected": False, "detections": []}
 
         width, height = frame["width"], frame["height"]
         rgb_bytes = bytes(frame["data"])
 
         detections: list[FaceDetection] = []
-        for face in face_boxes:
-            x1, y1, x2, y2 = face["box"]
-            embedding = await embedder.embed_from_crop(rgb_bytes, width, height, (x1, y1, x2, y2))
+        for _cid, conf, box in raw:
+            embedding = await embedder.embed_from_crop(rgb_bytes, width, height, box)
             detections.append(
                 {
                     "label": "person",
                     "attribute": "face",
-                    "confidence": face["confidence"],
-                    "box": {
-                        "x": x1 / width,
-                        "y": y1 / height,
-                        "width": (x2 - x1) / width,
-                        "height": (y2 - y1) / height,
-                    },
+                    "confidence": conf,
+                    "box": normalize_box(box, width, height),
                     "embedding": embedding,
                 }
             )
@@ -475,39 +513,25 @@ class ONNXPlugin(
         if not detector.initialized or not ocr.initialized:
             return None
 
-        image = Image.open(io.BytesIO(image_data)).convert("RGB")
-        width, height = image.size
-        rgb_bytes = image.tobytes()
-        resized = image.resize((detector.input_width, detector.input_height))
-        image.close()
+        rgb = decode_image(image_data)
+        height, width = int(rgb.shape[0]), int(rgb.shape[1])
+        raw = await detector.detect(rgb)
 
-        raw = await detector.detect(resized)
-        resized.close()
-
-        sx, sy = width / detector.input_width, height / detector.input_height
+        scale_x = width / detector.input_size[0]
+        scale_y = height / detector.input_size[1]
 
         detections: list[LicensePlateDetection] = []
-        for plate in raw:
-            x1, y1, x2, y2 = (
-                plate["box"][0] * sx,
-                plate["box"][1] * sy,
-                plate["box"][2] * sx,
-                plate["box"][3] * sy,
-            )
-            ocr_result = await ocr.recognize_from_crop(rgb_bytes, width, height, (x1, y1, x2, y2))
+        for _cid, conf, box in raw:
+            image_box = scale_box(box, scale_x, scale_y)
+            ocr_result = await ocr.recognize(crop_rgb(rgb, image_box))
             if ocr_result and ocr_result.text:
                 detections.append(
                     {
                         "label": "vehicle",
                         "attribute": "license_plate",
-                        "confidence": plate["confidence"],
+                        "confidence": conf,
                         "plateText": ocr_result.text,
-                        "box": {
-                            "x": x1 / width,
-                            "y": y1 / height,
-                            "width": (x2 - x1) / width,
-                            "height": (y2 - y1) / height,
-                        },
+                        "box": normalize_box(image_box, width, height),
                     }
                 )
 
@@ -525,30 +549,24 @@ class ONNXPlugin(
         if not detector.initialized or not ocr.initialized:
             return None
 
-        plate_boxes = await detector.detect_frame(frame)
-        if not plate_boxes:
+        raw = await detector.detect_frame(frame)
+        if not raw:
             return {"detected": False, "detections": []}
 
         width, height = frame["width"], frame["height"]
         rgb_bytes = bytes(frame["data"])
 
         detections: list[LicensePlateDetection] = []
-        for plate in plate_boxes:
-            x1, y1, x2, y2 = plate["box"]
-            ocr_result = await ocr.recognize_from_crop(rgb_bytes, width, height, (x1, y1, x2, y2))
+        for _cid, conf, box in raw:
+            ocr_result = await ocr.recognize_from_crop(rgb_bytes, width, height, box)
             if ocr_result and ocr_result.text:
                 detections.append(
                     {
                         "label": "vehicle",
                         "attribute": "license_plate",
-                        "confidence": plate["confidence"],
+                        "confidence": conf,
                         "plateText": ocr_result.text,
-                        "box": {
-                            "x": x1 / width,
-                            "y": y1 / height,
-                            "width": (x2 - x1) / width,
-                            "height": (y2 - y1) / height,
-                        },
+                        "box": normalize_box(box, width, height),
                     }
                 )
 
@@ -576,10 +594,7 @@ class ONNXPlugin(
         if not encoder.initialized:
             return None
 
-        image = Image.open(io.BytesIO(image_data)).convert("RGB")
-        embedding = await encoder.embed_image(image)
-        image.close()
-
+        embedding = await encoder.embed_image(decode_image(image_data))
         if not embedding:
             return None
 
