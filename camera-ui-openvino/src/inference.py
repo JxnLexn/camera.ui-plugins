@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+import asyncio
+import contextlib
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+import numpy as np
+import openvino as ov
+from camera_ui_ml import InferenceBackend, Outputs
+
+
+class OpenVinoBackend(InferenceBackend):
+    def __init__(self, compiled: Any, loop: asyncio.AbstractEventLoop, device: str = "unknown") -> None:
+        self._compiled = compiled
+        self._loop = loop
+        self._device = device
+        self._output_count = len(compiled.outputs)
+        self._queue = ov.AsyncInferQueue(compiled)
+        self._queue.set_callback(self._on_done)
+
+        shape = compiled.inputs[0].shape  # box detectors are NCHW [1, 3, H, W]
+        self._input_size = (_dim(shape, 3), _dim(shape, 2))
+
+    @property
+    def input_size(self) -> tuple[int, int]:
+        return self._input_size
+
+    def metadata(self) -> Mapping[str, str]:
+        return {}  # OpenVINO IR carries no class names
+
+    @property
+    def device(self) -> str:
+        return self._device
+
+    async def infer(self, inputs: Sequence[Any]) -> Outputs:
+        future: asyncio.Future[Outputs] = self._loop.create_future()
+        await self._loop.run_in_executor(None, self._queue.start_async, list(inputs), future)
+        return await future
+
+    def close(self) -> None:
+        with contextlib.suppress(Exception):
+            self._queue.wait_all()
+
+    def _on_done(self, request: Any, future: asyncio.Future[Outputs]) -> None:
+        try:
+            outputs: list[np.ndarray[Any, Any]] = [
+                np.array(request.get_output_tensor(index).data) for index in range(self._output_count)
+            ]
+            self._loop.call_soon_threadsafe(_set_result, future, outputs)
+        except Exception as error:  # noqa: BLE001 - forwarded to the awaiting caller
+            self._loop.call_soon_threadsafe(_set_exception, future, error)
+
+
+def _set_result(future: asyncio.Future[Outputs], value: Outputs) -> None:
+    if not future.done():
+        future.set_result(value)
+
+
+def _set_exception(future: asyncio.Future[Outputs], error: BaseException) -> None:
+    if not future.done():
+        future.set_exception(error)
+
+
+def _dim(shape: Any, index: int) -> int:
+    try:
+        return int(shape[index])
+    except (TypeError, ValueError, IndexError):
+        return 0

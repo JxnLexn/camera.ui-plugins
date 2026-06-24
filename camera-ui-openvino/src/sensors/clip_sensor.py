@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from camera_ui_ml import detect_clip
 from camera_ui_sdk import (
     ClipDetectorSensor,
     ClipResult,
@@ -60,33 +61,10 @@ class OpenVinoClipSensor(ClipDetectorSensor["ClipStorageValues"]):
         model_name = self.storage.values.get("vision_model", DEFAULT_CLIP_VISION)
         encoder = self._plugin.clip_encoders.get(model_name)
 
-        empty: ClipResult = {"embeddings": [], "embeddingModel": DEFAULT_CLIP_EMBEDDER}
         if encoder is None or not encoder.initialized:
-            return [empty for _ in frames]
+            return [{"embeddings": [], "embeddingModel": DEFAULT_CLIP_EMBEDDER} for _ in frames]
 
-        embeddings = await encoder.embed_frames(frames)
-
-        results: list[ClipResult] = []
-        for i, emb in enumerate(embeddings):
-            if not emb:
-                results.append(empty)
-                continue
-
-            label = frames[i].get("label", "unknown")
-            results.append(
-                {
-                    "embeddings": [
-                        {
-                            "label": label,
-                            "box": {"x": 0, "y": 0, "width": 1, "height": 1},
-                            "embedding": emb,
-                        }
-                    ],
-                    "embeddingModel": encoder.embedding_model,
-                }
-            )
-
-        return results
+        return await detect_clip(encoder, frames)
 
     async def destroy(self) -> None:
         pass

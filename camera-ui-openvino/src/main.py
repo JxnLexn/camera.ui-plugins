@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-import io
 from typing import Any
 
 import openvino as ov
+from camera_ui_ml import (
+    BoxDetector,
+    Embedder,
+    PlateOcr,
+    crop_rgb,
+    decode_image,
+    normalize_box,
+    scale_box,
+)
+from camera_ui_ml.detectors.clip import ClipEncoder
 from camera_ui_sdk import (
     API_EVENT,
     BasePlugin,
@@ -28,10 +37,10 @@ from camera_ui_sdk import (
     PluginAPI,
     VideoFrameData,
 )
-from PIL import Image
 
 from defaults import (
     CLIP_VISION_MODELS,
+    DEFAULT_CLIP_TEXT,
     DEFAULT_CLIP_VISION,
     DEFAULT_FACE_DETECTOR,
     DEFAULT_FACE_EMBEDDER,
@@ -40,19 +49,20 @@ from defaults import (
     DEFAULT_OCR,
     DEFAULT_OPENVINO_DEVICE,
     FACE_DETECTOR_MODELS,
+    FACE_EMBEDDER_INPUT_SIZE,
     FACE_EMBEDDER_MODELS,
     LPD_DETECTOR_MODELS,
+    OBJECT_LABELS,
     OBJECT_MODELS,
+    OCR_ALPHABET,
+    OCR_INPUT_HEIGHT,
+    OCR_INPUT_WIDTH,
+    OCR_MAX_SLOTS,
     OCR_MODELS,
+    OCR_PAD_CHAR,
     OPENVINO_DEVICES,
 )
-from detectors.clip_encoder import ClipEncoder
-from detectors.face_detector import FaceDetector
-from detectors.face_embedder import FaceEmbedder
-from detectors.object_detector import ObjectDetector
-from detectors.plate_detector import PlateDetector
-from detectors.plate_ocr import PlateOCR
-from model_manager import ModelManager
+from model_manager import OpenVinoModelManager
 from sensors.clip_sensor import OpenVinoClipSensor
 from sensors.face_sensor import OpenVinoFaceSensor
 from sensors.lpd_sensor import OpenVinoLPDSensor
@@ -69,13 +79,13 @@ class OpenVinoPlugin(
     def __init__(self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage[Any]) -> None:
         super().__init__(logger, api, storage)
         self._core = ov.Core()
-        self.model_manager = ModelManager(api, logger, self._resolve_device)
+        self.model_manager = OpenVinoModelManager(api.storagePath, logger, self._resolve_device)
 
-        self.object_detectors: dict[str, ObjectDetector] = {}
-        self.face_detectors: dict[str, FaceDetector] = {}
-        self.face_embedders: dict[str, FaceEmbedder] = {}
-        self.plate_detectors: dict[str, PlateDetector] = {}
-        self.ocr_models: dict[str, PlateOCR] = {}
+        self.object_detectors: dict[str, BoxDetector] = {}
+        self.face_detectors: dict[str, BoxDetector] = {}
+        self.face_embedders: dict[str, Embedder] = {}
+        self.plate_detectors: dict[str, BoxDetector] = {}
+        self.ocr_models: dict[str, PlateOcr] = {}
         self.clip_encoders: dict[str, ClipEncoder] = {}
 
         self._sensors: dict[str, dict[str, Any]] = {}
@@ -100,7 +110,33 @@ class OpenVinoPlugin(
                 "required": True,
                 "onSet": self._on_device_change,
             },
+            {
+                "type": "string",
+                "key": "active_hardware",
+                "title": "Active Hardware",
+                "description": "Device currently running inference across loaded models (read-only).",
+                "readonly": True,
+                "store": False,
+                "onGet": self._active_hardware,
+            },
         ]
+
+    def _active_hardware(self) -> str:
+        backends = [
+            detector.backend.device
+            for detector in (
+                *self.object_detectors.values(),
+                *self.face_detectors.values(),
+                *self.plate_detectors.values(),
+                *self.face_embedders.values(),
+                *self.ocr_models.values(),
+            )
+            if detector.backend is not None
+        ]
+        backends += [enc.vision.device for enc in self.clip_encoders.values() if enc.vision is not None]
+        if not backends:
+            return "No models loaded yet"
+        return ", ".join(dict.fromkeys(backends))
 
     def _resolve_device(self) -> str:
         mode = self.storage.values.get("device", DEFAULT_OPENVINO_DEVICE)
@@ -114,11 +150,10 @@ class OpenVinoPlugin(
             return "AUTO"
 
         has_npu = any("NPU" in d for d in devices)
-        has_gpu = any("GPU" in d for d in devices)
+        gpus = [d for d in devices if "GPU" in d]  # "GPU", or "GPU.0"/"GPU.1" when multiple
+        has_gpu = bool(gpus)
         dgpus: list[str] = []
-        for d in devices:
-            if "GPU" not in d:
-                continue
+        for d in gpus:
             try:
                 name = str(self._core.get_property(d, "FULL_DEVICE_NAME"))
             except Exception:
@@ -131,7 +166,12 @@ class OpenVinoPlugin(
         if has_npu:
             return "AUTO:NPU,CPU"
         if dgpus:
+            # OpenVINO doesn't split a single model across multiple NVIDIA dGPUs
+            # reliably, so let AUTO pick one rather than forcing MULTI.
             return f"AUTO:{','.join(dgpus)},CPU"
+        if len(gpus) > 1:
+            # Multiple (e.g. Intel Arc) GPUs → MULTI round-robins requests across them.
+            return "MULTI:" + ",".join(gpus)
         if has_gpu:
             return "GPU"
         return "AUTO"
@@ -179,7 +219,6 @@ class OpenVinoPlugin(
         self.clip_encoders.clear()
 
     async def _on_start(self) -> None:
-        # Preload CLIP models so the first semantic search is instant
         asyncio.create_task(self._preload_clip())
 
     async def _preload_clip(self) -> None:
@@ -230,42 +269,54 @@ class OpenVinoPlugin(
 
         self._sensors[camera.id] = sensors
 
-    async def get_object_detector(self, model_name: str) -> ObjectDetector:
+    async def get_object_detector(self, model_name: str) -> BoxDetector:
         detector = self.object_detectors.get(model_name)
         if not detector:
-            detector = ObjectDetector(self.model_manager)
+            detector = BoxDetector(self.model_manager, self.logger, name="object detector")
             self.object_detectors[model_name] = detector
             await detector.initialize(model_name)
+            # OpenVINO IR has no embedded class names; inject the trained labels.
+            detector.labels = {index: str(label) for index, label in OBJECT_LABELS.items()}
         return detector
 
-    async def get_face_detector(self, model_name: str) -> FaceDetector:
+    async def get_face_detector(self, model_name: str) -> BoxDetector:
         detector = self.face_detectors.get(model_name)
         if not detector:
-            detector = FaceDetector(self.model_manager)
+            detector = BoxDetector(self.model_manager, self.logger, name="face detector")
             self.face_detectors[model_name] = detector
             await detector.initialize(model_name)
         return detector
 
-    async def get_face_embedder(self, model_name: str) -> FaceEmbedder:
+    async def get_face_embedder(self, model_name: str) -> Embedder:
         embedder = self.face_embedders.get(model_name)
         if not embedder:
-            embedder = FaceEmbedder(self.model_manager)
+            embedder = Embedder(self.model_manager, self.logger, size=FACE_EMBEDDER_INPUT_SIZE)
             self.face_embedders[model_name] = embedder
             await embedder.initialize(model_name)
         return embedder
 
-    async def get_plate_detector(self, model_name: str) -> PlateDetector:
+    async def get_plate_detector(self, model_name: str) -> BoxDetector:
         detector = self.plate_detectors.get(model_name)
         if not detector:
-            detector = PlateDetector(self.model_manager)
+            detector = BoxDetector(
+                self.model_manager, self.logger, name="plate detector", parse="end2end", threshold=0.25
+            )
             self.plate_detectors[model_name] = detector
             await detector.initialize(model_name)
         return detector
 
-    async def get_ocr(self, model_name: str) -> PlateOCR:
+    async def get_ocr(self, model_name: str) -> PlateOcr:
         ocr = self.ocr_models.get(model_name)
         if not ocr:
-            ocr = PlateOCR(self.model_manager)
+            ocr = PlateOcr(
+                self.model_manager,
+                self.logger,
+                width=OCR_INPUT_WIDTH,
+                height=OCR_INPUT_HEIGHT,
+                slots=OCR_MAX_SLOTS,
+                alphabet=OCR_ALPHABET,
+                pad_char=OCR_PAD_CHAR,
+            )
             self.ocr_models[model_name] = ocr
             await ocr.initialize(model_name)
         return ocr
@@ -273,9 +324,9 @@ class OpenVinoPlugin(
     async def get_clip_encoder(self, model_name: str) -> ClipEncoder:
         encoder = self.clip_encoders.get(model_name)
         if not encoder:
-            encoder = ClipEncoder(self.model_manager)
+            encoder = ClipEncoder(self.model_manager, self.logger)
             self.clip_encoders[model_name] = encoder
-            await encoder.initialize(model_name)
+            await encoder.initialize(model_name, DEFAULT_CLIP_TEXT)
         return encoder
 
     async def objectDetectionSettings(self) -> list[JsonSchema] | None:
@@ -300,7 +351,11 @@ class OpenVinoPlugin(
         if not detector.initialized:
             return None
 
-        detections = await detector.detect_single(image_data, metadata)
+        raw = await detector.detect_single(image_data, metadata)
+        detections: list[Detection] = [
+            {"label": detector.labels.get(cid, "unknown"), "confidence": conf, "box": box}  # type: ignore[typeddict-item]
+            for cid, conf, box in raw
+        ]
         return {"detected": len(detections) > 0, "detections": detections}
 
     async def detectObjects(
@@ -311,20 +366,15 @@ class OpenVinoPlugin(
         if not detector.initialized:
             return None
 
-        results = await detector.detect_frame(frame)
+        raw = await detector.detect_frame(frame)
         width, height = frame["width"], frame["height"]
         detections: list[Detection] = [
             {
-                "label": r["label"],
-                "confidence": r["confidence"],
-                "box": {
-                    "x": r["box"][0] / width,
-                    "y": r["box"][1] / height,
-                    "width": (r["box"][2] - r["box"][0]) / width,
-                    "height": (r["box"][3] - r["box"][1]) / height,
-                },
+                "label": detector.labels.get(cid, "unknown"),  # type: ignore[typeddict-item]
+                "confidence": conf,
+                "box": normalize_box(box, width, height),
             }
-            for r in results
+            for cid, conf, box in raw
         ]
         return {"detected": len(detections) > 0, "detections": detections}
 
@@ -363,34 +413,29 @@ class OpenVinoPlugin(
         if not detector.initialized or not embedder.initialized:
             return None
 
-        face_boxes = await detector.detect_single(image_data, metadata)
-        if not face_boxes:
+        rgb = decode_image(image_data)
+        height, width = int(rgb.shape[0]), int(rgb.shape[1])
+        raw = await detector.detect(rgb)
+        if not raw:
             return {"detected": False, "detections": []}
 
-        image = Image.open(io.BytesIO(image_data)).convert("RGB")
-        width, height = image.size
-        rgb_bytes = image.tobytes()
+        scale_x = width / detector.input_size[0]
+        scale_y = height / detector.input_size[1]
 
         detections: list[FaceDetection] = []
-        for face in face_boxes:
-            x1, y1, x2, y2 = face["box"]
-            embedding = await embedder.embed_from_crop(rgb_bytes, width, height, (x1, y1, x2, y2))
+        for _cid, conf, box in raw:
+            image_box = scale_box(box, scale_x, scale_y)
+            embedding = await embedder.embed(crop_rgb(rgb, image_box))
             detections.append(
                 {
                     "label": "person",
                     "attribute": "face",
-                    "confidence": face["confidence"],
-                    "box": {
-                        "x": x1 / width,
-                        "y": y1 / height,
-                        "width": (x2 - x1) / width,
-                        "height": (y2 - y1) / height,
-                    },
+                    "confidence": conf,
+                    "box": normalize_box(image_box, width, height),
                     "embedding": embedding,
                 }
             )
 
-        image.close()
         return {"detected": len(detections) > 0, "detections": detections}
 
     async def detectFaces(
@@ -405,28 +450,22 @@ class OpenVinoPlugin(
         if not detector.initialized or not embedder.initialized:
             return None
 
-        face_boxes = await detector.detect_frame(frame)
-        if not face_boxes:
+        raw = await detector.detect_frame(frame)
+        if not raw:
             return {"detected": False, "detections": []}
 
         width, height = frame["width"], frame["height"]
         rgb_bytes = bytes(frame["data"])
 
         detections: list[FaceDetection] = []
-        for face in face_boxes:
-            x1, y1, x2, y2 = face["box"]
-            embedding = await embedder.embed_from_crop(rgb_bytes, width, height, (x1, y1, x2, y2))
+        for _cid, conf, box in raw:
+            embedding = await embedder.embed_from_crop(rgb_bytes, width, height, box)
             detections.append(
                 {
                     "label": "person",
                     "attribute": "face",
-                    "confidence": face["confidence"],
-                    "box": {
-                        "x": x1 / width,
-                        "y": y1 / height,
-                        "width": (x2 - x1) / width,
-                        "height": (y2 - y1) / height,
-                    },
+                    "confidence": conf,
+                    "box": normalize_box(box, width, height),
                     "embedding": embedding,
                 }
             )
@@ -468,39 +507,25 @@ class OpenVinoPlugin(
         if not detector.initialized or not ocr.initialized:
             return None
 
-        image = Image.open(io.BytesIO(image_data)).convert("RGB")
-        width, height = image.size
-        rgb_bytes = image.tobytes()
-        resized = image.resize((detector.input_width, detector.input_height))
-        image.close()
+        rgb = decode_image(image_data)
+        height, width = int(rgb.shape[0]), int(rgb.shape[1])
+        raw = await detector.detect(rgb)
 
-        raw = await detector.detect(resized)
-        resized.close()
-
-        sx, sy = width / detector.input_width, height / detector.input_height
+        scale_x = width / detector.input_size[0]
+        scale_y = height / detector.input_size[1]
 
         detections: list[LicensePlateDetection] = []
-        for plate in raw:
-            x1, y1, x2, y2 = (
-                plate["box"][0] * sx,
-                plate["box"][1] * sy,
-                plate["box"][2] * sx,
-                plate["box"][3] * sy,
-            )
-            ocr_result = await ocr.recognize_from_crop(rgb_bytes, width, height, (x1, y1, x2, y2))
+        for _cid, conf, box in raw:
+            image_box = scale_box(box, scale_x, scale_y)
+            ocr_result = await ocr.recognize(crop_rgb(rgb, image_box))
             if ocr_result and ocr_result.text:
                 detections.append(
                     {
                         "label": "vehicle",
                         "attribute": "license_plate",
-                        "confidence": plate["confidence"],
+                        "confidence": conf,
                         "plateText": ocr_result.text,
-                        "box": {
-                            "x": x1 / width,
-                            "y": y1 / height,
-                            "width": (x2 - x1) / width,
-                            "height": (y2 - y1) / height,
-                        },
+                        "box": normalize_box(image_box, width, height),
                     }
                 )
 
@@ -518,30 +543,24 @@ class OpenVinoPlugin(
         if not detector.initialized or not ocr.initialized:
             return None
 
-        plate_boxes = await detector.detect_frame(frame)
-        if not plate_boxes:
+        raw = await detector.detect_frame(frame)
+        if not raw:
             return {"detected": False, "detections": []}
 
         width, height = frame["width"], frame["height"]
         rgb_bytes = bytes(frame["data"])
 
         detections: list[LicensePlateDetection] = []
-        for plate in plate_boxes:
-            x1, y1, x2, y2 = plate["box"]
-            ocr_result = await ocr.recognize_from_crop(rgb_bytes, width, height, (x1, y1, x2, y2))
+        for _cid, conf, box in raw:
+            ocr_result = await ocr.recognize_from_crop(rgb_bytes, width, height, box)
             if ocr_result and ocr_result.text:
                 detections.append(
                     {
                         "label": "vehicle",
                         "attribute": "license_plate",
-                        "confidence": plate["confidence"],
+                        "confidence": conf,
                         "plateText": ocr_result.text,
-                        "box": {
-                            "x": x1 / width,
-                            "y": y1 / height,
-                            "width": (x2 - x1) / width,
-                            "height": (y2 - y1) / height,
-                        },
+                        "box": normalize_box(box, width, height),
                     }
                 )
 
@@ -569,10 +588,7 @@ class OpenVinoPlugin(
         if not encoder.initialized:
             return None
 
-        image = Image.open(io.BytesIO(image_data)).convert("RGB")
-        embedding = await encoder.embed_image(image)
-        image.close()
-
+        embedding = await encoder.embed_image(decode_image(image_data))
         if not embedding:
             return None
 
