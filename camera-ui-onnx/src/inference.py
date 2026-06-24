@@ -77,7 +77,9 @@ def _device_label(sessions: list[Any]) -> str:
 
 
 def _dim(shape: Sequence[Any], index: int) -> int:
+    # Non-box models have <4 dims (CLIP text input_ids is 2D [1, 77]) or symbolic
+    # dynamic dims (str) → fall back to 0; only box detectors read input_size.
     try:
         return int(shape[index])
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, IndexError):
         return 0
