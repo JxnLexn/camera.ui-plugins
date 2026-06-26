@@ -111,7 +111,6 @@ export class RtpSplitter {
         this.send(description.message, forwardingTarget);
       }
 
-      // Unsubscribe nach der ersten Ausführung
       subscription?.unsubscribe();
     });
   }
@@ -124,7 +123,6 @@ export class RtpSplitter {
         await this.send(description.message, forwardingTarget);
       }
 
-      // Unsubscribe nach der ersten Ausführung
       subscription?.unsubscribe();
     });
   }

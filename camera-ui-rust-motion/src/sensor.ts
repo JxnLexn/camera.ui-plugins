@@ -101,29 +101,23 @@ export class RustMotionSensor extends MotionDetectorSensor<RustMotionStorageValu
       return { detected: false, detections: [] };
     }
 
-    // Ensure ImageProcessor is initialized with correct dimensions
     this.ensureImageProcessor(frame.width, frame.height);
 
     if (!this.imageProcessor) {
       return { detected: false, detections: [] };
     }
 
-    // Get configuration from storage (with defaults)
     const config = this.getConfig();
     const blurRadius = config.blurRadius % 2 === 0 ? config.blurRadius + 1 : config.blurRadius;
 
-    // Convert frame data to Uint8Array (rust-detector expects this)
+    // rust-detector expects a Uint8Array
     const frameData = frame.data instanceof Uint8Array ? frame.data : new Uint8Array(frame.data);
 
-    // Process frame through Rust detector
-    // Returns array of [x, y, width, height] tuples
     const boundingBoxes = this.imageProcessor.processImage(frameData, config.threshold, blurRadius, config.dilationSize, config.area);
 
     return {
       detected: boundingBoxes.length > 0,
-      // rust-detector returns BoundingBox = [x1, y1, x2, y2] (top-left + bottom-right
-      // in pixel space). The SDK Detection.box format is { x, y, width, height } where
-      // width/height are dimensions, not corner coordinates — convert here.
+      // rust-detector returns [x1, y1, x2, y2] pixel corners; SDK box wants { x, y, width, height }
       detections: boundingBoxes.map((box) => {
         const [x1, y1, x2, y2] = box;
         return {
@@ -159,14 +153,12 @@ export class RustMotionSensor extends MotionDetectorSensor<RustMotionStorageValu
     }
 
     if (this.imageProcessor && this.lastWidth === width && this.lastHeight === height) {
-      return; // Already configured correctly
+      return;
     }
 
     if (this.imageProcessor) {
-      // Reconfigure existing processor
       this.imageProcessor.reconfigure(width, height);
     } else {
-      // Create new processor
       this.imageProcessor = new rustDetector.ImageProcessor(width, height);
     }
 

@@ -44,8 +44,7 @@ def normalize_box(box: Box, width: float, height: float) -> NormalizedBox:
 
 
 def pad_box(box: Box, width: float, height: float, padding: float, min_size: int = 0) -> Box:
-    """Expand a box by ``padding`` (fraction of its size) and an optional minimum
-    pixel size, clamped to the frame. Used to crop faces/plates with context."""
+    """Expand a box by ``padding`` (fraction of its size) and an optional minimum pixel size, clamped to the frame."""
     x1, y1, x2, y2 = box
     w = x2 - x1
     h = y2 - y1

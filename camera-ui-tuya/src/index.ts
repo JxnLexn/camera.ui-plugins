@@ -20,16 +20,12 @@ import type { Device } from './tuya/types.js';
 import type { TuyaConfig } from './types.js';
 
 export default class TuyaPlugin extends BasePlugin<TuyaConfig> implements DiscoveryProvider {
-  /** Initialized camera controllers (tuyaCameraId -> Camera) */
   private tuyaCameras = new Map<string, Camera>();
 
-  /** Tuya devices discovered from Tuya API (tuyaDeviceId -> Device) */
   private discoveredTuyaDevices = new Map<string, Device>();
 
-  /** Cameras already added to camera.ui (cameraDeviceId -> CameraDevice) */
   private existingCameras = new Map<string, CameraDevice>();
 
-  /** Promise lock to prevent multiple simultaneous connections */
   private connectPromise: Promise<void> | null = null;
 
   constructor(logger: LoggerService, api: PluginAPI, storage: DeviceStorage<TuyaConfig>) {
@@ -110,14 +106,12 @@ export default class TuyaPlugin extends BasePlugin<TuyaConfig> implements Discov
   public async configureCameras(cameras: CameraDevice[]): Promise<void> {
     for (const camera of cameras) {
       this.existingCameras.set(camera.id, camera);
-      // Note: onCameraAdded will be called when Tuya API connects and device is available
     }
   }
 
   public async onCameraAdded(camera: CameraDevice): Promise<void> {
     this.existingCameras.set(camera.id, camera);
 
-    // Find the corresponding Tuya device by nativeId
     const tuyaDeviceId = camera.nativeId;
     if (!tuyaDeviceId) {
       this.logger.warn(`Camera ${camera.name} has no nativeId, skipping initialization`);
@@ -126,7 +120,6 @@ export default class TuyaPlugin extends BasePlugin<TuyaConfig> implements Discov
 
     const tuyaDevice = this.discoveredTuyaDevices.get(tuyaDeviceId);
     if (tuyaDevice) {
-      // Tuya device is available, initialize it
       await this.initializeCamera(tuyaDevice, camera);
     } else {
       this.logger.debug(`Tuya device ${tuyaDeviceId} not yet discovered, will initialize when available`);
@@ -141,7 +134,6 @@ export default class TuyaPlugin extends BasePlugin<TuyaConfig> implements Discov
         this.tuyaCameras.delete(cameraDevice.nativeId);
       }
 
-      // Push the camera back as discovered immediately
       const tuyaDevice = this.discoveredTuyaDevices.get(cameraDevice.nativeId);
       if (tuyaDevice) {
         await this.api.deviceManager.pushDiscoveredCameras([
@@ -162,12 +154,10 @@ export default class TuyaPlugin extends BasePlugin<TuyaConfig> implements Discov
   }
 
   public async onGetCameraSettings(_camera: DiscoveredCamera): Promise<JsonSchemaWithoutCallbacks[]> {
-    // No additional credentials needed - already logged in via plugin config
     return [];
   }
 
   public async onAdoptCamera(camera: DiscoveredCamera, _settings: Record<string, unknown>): Promise<CameraConfig> {
-    // Extract tuya device ID from discovery ID (tuya:deviceId -> deviceId)
     const tuyaDeviceId = camera.id.replace('tuya:', '');
     const tuyaDevice = this.discoveredTuyaDevices.get(tuyaDeviceId);
 
@@ -175,7 +165,6 @@ export default class TuyaPlugin extends BasePlugin<TuyaConfig> implements Discov
       throw new Error(`Tuya device ${tuyaDeviceId} not found`);
     }
 
-    // Return camera config - backend will create the camera
     const config: CameraConfig = {
       name: tuyaDevice.deviceName,
       nativeId: tuyaDeviceId,
@@ -283,7 +272,6 @@ export default class TuyaPlugin extends BasePlugin<TuyaConfig> implements Discov
         }
       }
 
-      // Update discovered devices
       await this.updateDiscoveredDevices(devices);
     } catch (error: any) {
       this.logger.error('An error occured during connecting:', error);
@@ -291,28 +279,23 @@ export default class TuyaPlugin extends BasePlugin<TuyaConfig> implements Discov
   }
 
   private async updateDiscoveredDevices(devices: Device[]): Promise<void> {
-    // Store all tuya devices and initialize existing ones
     for (const device of devices) {
       const tuyaDeviceId = device.deviceId;
       this.discoveredTuyaDevices.set(tuyaDeviceId, device);
 
-      // Try to initialize existing camera
       await this.initializeExistingCamera(device);
     }
 
-    // Push new cameras to discovery manager
     await this.pushDiscoveredCameras();
   }
 
   private async initializeExistingCamera(device: Device): Promise<void> {
     const tuyaDeviceId = device.deviceId;
 
-    // Skip if already initialized
     if (this.tuyaCameras.has(tuyaDeviceId)) {
       return;
     }
 
-    // Find existing camera device by nativeId
     const cameraDevice = Array.from(this.existingCameras.values()).find((camera) => camera.nativeId === tuyaDeviceId);
 
     if (cameraDevice) {
@@ -323,7 +306,6 @@ export default class TuyaPlugin extends BasePlugin<TuyaConfig> implements Discov
   private async initializeCamera(device: Device, cameraDevice: CameraDevice): Promise<void> {
     const tuyaDeviceId = device.deviceId;
 
-    // Skip if already initialized
     if (this.tuyaCameras.has(tuyaDeviceId)) {
       return;
     }
@@ -348,7 +330,6 @@ export default class TuyaPlugin extends BasePlugin<TuyaConfig> implements Discov
     const discovered: DiscoveredCamera[] = [];
 
     for (const [tuyaDeviceId, device] of this.discoveredTuyaDevices) {
-      // Skip cameras that are already added to camera.ui
       const existingCamera = Array.from(this.existingCameras.values()).find((camera) => camera.nativeId === tuyaDeviceId);
       if (existingCamera) {
         continue;

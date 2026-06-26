@@ -64,7 +64,6 @@ export class OnvifPTZSensor extends PTZControl {
         },
       });
 
-      // Sync state after successful command
       await super.setPosition(position);
     } catch (error) {
       if (!this.ignoreError(error)) {
@@ -99,7 +98,6 @@ export class OnvifPTZSensor extends PTZControl {
         });
       }
 
-      // Sync velocity state
       await super.setVelocity(velocity);
     } catch (error) {
       this.fastPathUntilTs = 0;
@@ -120,7 +118,6 @@ export class OnvifPTZSensor extends PTZControl {
         presetToken: preset,
       });
 
-      // Sync state
       await super.setTargetPreset(preset);
     } catch (error) {
       if (!this.ignoreError(error)) {
@@ -137,7 +134,6 @@ export class OnvifPTZSensor extends PTZControl {
         await this.device.ptz.gotoHomePosition({});
         await super.setPosition({ pan: 0, tilt: 0, zoom: 0 });
       } else {
-        // Fallback to absolute move to 0,0,0
         await this.setPosition({ pan: 0, tilt: 0, zoom: 0 });
       }
     } catch (error) {
@@ -148,7 +144,6 @@ export class OnvifPTZSensor extends PTZControl {
   }
 
   private async detectCapabilities(): Promise<void> {
-    // Detect PTZ capabilities
     const hasPTZ = this.device.defaultProfile?.PTZConfiguration !== undefined;
     const canPanTilt =
       this.device.defaultProfile?.PTZConfiguration?.defaultAbsolutePantTiltPositionSpace !== undefined ||
@@ -170,13 +165,11 @@ export class OnvifPTZSensor extends PTZControl {
     const hasTilt = hasPTZ && canPanTilt && minTilt !== 0 && maxTilt !== 0;
     const hasZoom = hasPTZ && canZoom && minZoom !== 0 && maxZoom !== 0;
 
-    // Set capabilities based on discovered features
     const caps: PTZCapability[] = [];
     if (hasPan) caps.push(PTZCapability.Pan);
     if (hasTilt) caps.push(PTZCapability.Tilt);
     if (hasZoom) caps.push(PTZCapability.Zoom);
 
-    // Check for home position support via PTZ node capabilities
     let hasHome = false;
     let maxPresets = 0;
     try {
@@ -186,29 +179,25 @@ export class OnvifPTZSensor extends PTZControl {
       if (hasHome) {
         caps.push(PTZCapability.Home);
       }
-      // Get max presets from node info
       maxPresets = nodeValues.reduce((max, node) => Math.max(max, node.maximumNumberOfPresets ?? 0), 0);
     } catch {
-      // Failed to get nodes info
+      // ignore
     }
 
-    // Check for presets support by trying to get presets list
     let presetsCount = 0;
     try {
       const presetsResponse = await this.device.ptz.getPresets();
       if (presetsResponse && Object.keys(presetsResponse).length > 0) {
         caps.push(PTZCapability.Presets);
-        // Update presets property with available presets
         const presetsList = Object.values(presetsResponse);
         const presetNames = presetsList.map((p: { name?: string; token?: string }) => p.name ?? p.token ?? '').filter(Boolean);
         this.setPresets(presetNames);
         presetsCount = presetNames.length;
       }
     } catch {
-      // Presets not supported or failed to fetch
+      // ignore
     }
 
-    // Log all detected capabilities
     this.cameraDevice.logger.log('PTZ capabilities:', {
       pan: hasPan,
       tilt: hasTilt,
@@ -221,15 +210,12 @@ export class OnvifPTZSensor extends PTZControl {
       this.cameraDevice.logger.warn('Camera does not support PTZ');
     }
 
-    // Update capabilities (triggers broadcast to consumers)
+    // Triggers broadcast to consumers.
     this.capabilities = caps;
   }
 
   private async pollStatus(): Promise<void> {
-    // Fast-path grace window — setVelocity just committed a state and gave
-    // the camera time to physically respond. Polling is fully suppressed
-    // here (no RPC, no state decision) so it can't second-guess the
-    // fast-path during motor dead-time or post-stop deceleration.
+    // Fast-path grace window: suppress polling so it can't second-guess a just-committed setVelocity.
     if (Date.now() < this.fastPathUntilTs) return;
 
     let status: PTZStatus;
@@ -254,10 +240,7 @@ export class OnvifPTZSensor extends PTZControl {
       zoom: status.position?.zoom?.x,
     };
 
-    // Publish position on every meaningful change so consumers (e.g. the PTZ
-    // autotracker) can compute per-frame pose deltas for Norfair's camera-
-    // motion compensation. `super.setPosition` only writes SDK state — no
-    // hardware action — so this is safe to call from polling.
+    // Publish position changes for the autotracker; super.setPosition only writes SDK state, no hardware action.
     const current = this.position;
     const posDelta = Math.max(
       Math.abs((pos.pan ?? 0) - (current?.pan ?? 0)),
@@ -272,9 +255,7 @@ export class OnvifPTZSensor extends PTZControl {
       });
     }
 
-    // Primary signal: ONVIF MoveStatus, when the camera actually reports
-    // it as IDLE / MOVING (not UNKNOWN). Some PTZs report only panTilt,
-    // others only zoom, so we accept either as authoritative.
+    // Primary signal: ONVIF MoveStatus (IDLE/MOVING, not UNKNOWN); some PTZs report only panTilt or only zoom.
     const ptUsable = pt === 'IDLE' || pt === 'MOVING';
     const zUsable = z === 'IDLE' || z === 'MOVING';
     if (ptUsable || zUsable) {
@@ -302,8 +283,7 @@ export class OnvifPTZSensor extends PTZControl {
       this.idleStreak = 0;
     } else {
       this.idleStreak++;
-      // Only flip to IDLE after N consecutive no-delta polls — rides out
-      // momentary polling glitches and micro-jitter in position reporting.
+      // Flip to IDLE only after N consecutive no-delta polls to ride out jitter.
       if (this.idleStreak >= IDLE_POLLS_TO_STOP) {
         this.setMoving(false);
       }

@@ -25,7 +25,7 @@ interface DeviceListResponse extends BaseResponse {
 
 interface DeviceStatus {
   code: string;
-  value: any; // Can be boolean, string, number, etc.
+  value: any;
 }
 
 interface CloudDevice {

@@ -34,7 +34,7 @@ export class UniversalStream {
   private readonly startTime = Date.now();
 
   private constructor(namespace: string, onSocket: ((socket: Socket) => void) | undefined) {
-    this.isWin32 = process.platform === 'win32'; // Cache platform check
+    this.isWin32 = process.platform === 'win32';
 
     const unique_sock_id = Math.min(...Array.from({ length: 100 }, (_, i) => i + 1).filter((i) => !UniversalStream.socks.has(i)));
     UniversalStream.socks.add(unique_sock_id);
@@ -52,7 +52,7 @@ export class UniversalStream {
 
   private generateSockPath(namespace: string, unique_sock_id: number): string {
     let sockpath = '';
-    const pipeName = `${namespace}.${unique_sock_id}.sock`; // Use template literals
+    const pipeName = `${namespace}.${unique_sock_id}.sock`;
 
     if (this.isWin32) {
       const pipePrefix = '\\\\.\\pipe\\';
@@ -60,7 +60,6 @@ export class UniversalStream {
     } else {
       sockpath = join(tmpdir(), pipeName);
 
-      // Use async file operations
       if (fs.existsSync(sockpath)) {
         fs.unlinkSync(sockpath);
       }
@@ -70,7 +69,7 @@ export class UniversalStream {
   }
 
   private generateUrl(sockpath: string): string {
-    return this.isWin32 ? sockpath : `unix:${sockpath}`; // Use template literals
+    return this.isWin32 ? sockpath : `unix:${sockpath}`;
   }
 
   public close(): void {

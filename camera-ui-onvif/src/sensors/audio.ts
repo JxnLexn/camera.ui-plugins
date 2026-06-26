@@ -15,7 +15,6 @@ export class OnvifAudioSensor extends AudioSensor {
   handleAudio(data: AudioEventData): void {
     this.reportDetections(data.isAudioDetected);
 
-    // Update decibel level if provided
     if (data.level !== undefined) {
       this.setDecibels(data.level);
     }

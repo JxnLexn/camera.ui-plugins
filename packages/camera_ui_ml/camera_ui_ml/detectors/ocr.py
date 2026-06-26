@@ -12,8 +12,7 @@ from ..parsing import decode_ocr
 from ..preprocess import frame_to_rgb
 from .base import BaseDetector
 
-#: Default plate alphabet: digits + uppercase letters + pad. Plugins pass the
-#: exact constant their model was trained with.
+#: Default plate alphabet; pass the exact constant the model was trained with.
 DEFAULT_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 
 
@@ -79,8 +78,7 @@ class PlateOcr(BaseDetector):
     def _decode(self, outputs: Outputs) -> OcrResult | None:
         logits: NDArray | None = None
         for value in outputs:
-            # Batched [1, slots, classes] (onnx/openvino/coreml) or bare [slots,
-            # classes] (ncnn) — squeeze to a 2D logits matrix either way.
+            # Output is [1, slots, classes] or bare [slots, classes]; squeeze to 2D.
             arr = np.squeeze(np.asarray(value))
             if arr.ndim == 2 and arr.shape[0] == self._slots:
                 logits = arr

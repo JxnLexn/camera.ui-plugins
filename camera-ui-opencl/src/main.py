@@ -131,48 +131,38 @@ class OpenCL(BasePlugin, MotionDetectionInterface):
 
         self.motion_detection_running = True
 
-        # Create OpenCL context
         ctx = create_program()
 
-        # Create a temporary file in memory using BytesIO
         input_buffer = io.BytesIO(video_data)
 
-        # Generate unique temporary filenames in system's temp directory
         temp_input = os.path.join(tempfile.gettempdir(), f"input_{uuid.uuid4()}.mp4")
         temp_output = os.path.join(tempfile.gettempdir(), f"output_{uuid.uuid4()}.mp4")
 
         detections: list[Detection] = []
 
         try:
-            # Write to temp file efficiently using a single write operation
             with open(temp_input, "wb") as f:
                 f.write(input_buffer.getvalue())
 
-            # Release memory of input buffer
             input_buffer.close()
             del input_buffer
 
-            # Open video capture from temporary file
             cap = cv2.VideoCapture(temp_input)
 
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-            # Use H.264 codec for better compression and quality
             fourcc = cv2.VideoWriter.fourcc("a", "v", "c", "1")
             out = cv2.VideoWriter(temp_output, fourcc, fps, (width, height), True)
 
-            # Get configuration parameters
             blur = config.get("blur", DEFAULT_BLUR)
             threshold = config.get("threshold", DEFAULT_THRESHOLD)
             area = config.get("area", DEFAULT_AREA)
             dilation = config.get("dilation", DEFAULT_DILT)
 
-            # Initialize OpenCL detector
             opencl_detector = OpenCLMotionDetector(ctx, width, height, blur, self.logger)
 
-            # Use a smaller thread pool since we're mostly GPU bound
             executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="OpenCV")
 
             try:
@@ -181,10 +171,8 @@ class OpenCL(BasePlugin, MotionDetectionInterface):
                     if not ret:
                         break
 
-                    # Convert to grayscale efficiently
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-                    # Process frame using OpenCL
                     dets = await asyncio.get_event_loop().run_in_executor(
                         executor,
                         opencl_detector.process_frame,
@@ -209,7 +197,6 @@ class OpenCL(BasePlugin, MotionDetectionInterface):
                             }
                         )
 
-                    # Draw rectangles directly on frame
                     for x1, y1, x2, y2 in dets:
                         pt1: cv2.typing.Point = (int(x1), int(y1))
                         pt2: cv2.typing.Point = (int(x2), int(y2))
@@ -217,7 +204,6 @@ class OpenCL(BasePlugin, MotionDetectionInterface):
 
                     out.write(frame)
 
-                    # Explicitly delete frame to help garbage collection
                     del frame
 
             finally:
@@ -226,7 +212,6 @@ class OpenCL(BasePlugin, MotionDetectionInterface):
                 executor.shutdown()
                 del opencl_detector
 
-            # Read output file efficiently
             with open(temp_output, "rb") as f:
                 result_bytes = f.read()
 
@@ -239,7 +224,6 @@ class OpenCL(BasePlugin, MotionDetectionInterface):
         finally:
             self.motion_detection_running = False
 
-            # Clean up temporary files
             for temp_file in (temp_input, temp_output):
                 try:
                     if os.path.exists(temp_file):

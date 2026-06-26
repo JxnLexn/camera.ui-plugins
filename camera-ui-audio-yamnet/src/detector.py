@@ -41,7 +41,6 @@ class AudioDetector:
 
     async def _do_initialize(self) -> None:
         try:
-            # Download model and labels
             model_file = "yamnet.tflite"
             labels_file = "yamnet_class_map.csv"
             await self._download_file(YAMNET_MODEL_URL, model_file)
@@ -51,11 +50,9 @@ class AudioDetector:
             if self.closed:
                 return
 
-            # Load labels from CSV
             labels_path = os.path.join(self.model_path, labels_file)
             self.labels = self._load_labels(labels_path)
 
-            # Load TFLite model
             model_path = os.path.join(self.model_path, model_file)
             self.interpreter = await asyncio.to_thread(self._load_model, model_path)
 
@@ -83,10 +80,10 @@ class AudioDetector:
         labels: list[str] = []
         with open(labels_path) as f:
             reader = csv.reader(f)
-            next(reader)  # Skip header
+            next(reader)
             for row in reader:
                 if len(row) >= 3:
-                    labels.append(row[2])  # display_name column
+                    labels.append(row[2])
         return labels
 
     async def detect(self, waveform: np.ndarray[Any, Any]) -> list[tuple[str, float]]:
@@ -101,17 +98,14 @@ class AudioDetector:
 
         input_data = waveform.astype(np.float32)
 
-        # Set input tensor and run inference
         self.interpreter.set_tensor(self.input_details[0]["index"], input_data)
         self.interpreter.invoke()
 
-        # Get scores - YAMNet outputs [num_frames, num_classes]
+        # YAMNet outputs [num_frames, num_classes]
         scores: np.ndarray[Any, Any] = self.interpreter.get_tensor(self.output_details[0]["index"])
 
-        # Average scores across all frames
         avg_scores: np.ndarray[Any, Any] = np.mean(scores, axis=0)
 
-        # Build results list with all labels and scores
         results: list[tuple[str, float]] = []
         for i, score in enumerate(avg_scores):
             if i < len(self.labels):

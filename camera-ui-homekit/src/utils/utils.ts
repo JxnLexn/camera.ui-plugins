@@ -64,27 +64,20 @@ export class Subscribed {
 }
 
 export function generateValidAccessoryName(input = ''): string {
-  // Function to remove leading and trailing special characters
   const trimSpecialChars = (str: string): string => {
     return str.replace(/^[^a-zA-Z]+|[^a-zA-Z0-9]+$/g, '');
   };
 
-  // Remove leading and trailing whitespace
   let safeName = trimSpecialChars(input.trim());
 
-  // Replace all special characters with a space
   safeName = safeName.replace(/[^\p{L}\p{N} ']/gu, ' ');
 
-  // Remove multiple spaces
   safeName = safeName.replace(/\s+/g, ' ');
 
-  // Limit to 250 characters
   safeName = safeName.slice(0, 250);
 
-  // Remove leading and trailing special characters again
   safeName = trimSpecialChars(safeName);
 
-  // Check if the name is valid
   const isValid = safeName.length >= 2 && /^[\p{L}\p{N}][\p{L}\p{N} ']*[\p{L}\p{N}]$/u.test(safeName);
 
   if (!isValid) {

@@ -43,7 +43,6 @@ class OpenCVMotionSensor(MotionDetectorSensor[OpenCVStorageValues]):
     def __init__(self, name: str = "OpenCV Motion") -> None:
         super().__init__(name)
 
-        # Detection state
         self._prev_frame: np.ndarray[Any, Any] | None = None
         self._back_sub: cv2.BackgroundSubtractorMOG2 | None = None
         self._executor: ThreadPoolExecutor | None = None
@@ -51,7 +50,6 @@ class OpenCVMotionSensor(MotionDetectorSensor[OpenCVStorageValues]):
     @property
     def storage_schema(self) -> list[JsonSchema]:
         return [
-            # Model selection
             {
                 "type": "string",
                 "key": "motion_detector",
@@ -72,7 +70,6 @@ class OpenCVMotionSensor(MotionDetectorSensor[OpenCVStorageValues]):
                 "group": "Manage",
                 "onSet": self._reset_all_settings,
             },
-            # Default model settings
             {
                 "type": "number",
                 "key": "default_area",
@@ -134,7 +131,6 @@ class OpenCVMotionSensor(MotionDetectorSensor[OpenCVStorageValues]):
                 "group": "Default",
                 "onSet": self._reset_default_settings,
             },
-            # Background Substraction settings
             {
                 "type": "number",
                 "key": "background_substraction_area",
@@ -183,7 +179,6 @@ class OpenCVMotionSensor(MotionDetectorSensor[OpenCVStorageValues]):
                 "group": "Background Substraction",
                 "onSet": self._reset_bs_settings,
             },
-            # Frame Difference settings
             {
                 "type": "number",
                 "key": "frame_difference_area",
@@ -209,12 +204,10 @@ class OpenCVMotionSensor(MotionDetectorSensor[OpenCVStorageValues]):
         ]
 
     async def detectMotion(self, frame: VideoFrameData) -> MotionResult:
-        # Convert frame data (bytes) to numpy array
         current_frame: np.ndarray[Any, Any] = np.frombuffer(frame["data"], dtype=np.uint8).reshape(
             (frame["height"], frame["width"])
         )
 
-        # Initialize executor if needed
         if self._executor is None:
             self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="OpenCV")
 
@@ -242,9 +235,8 @@ class OpenCVMotionSensor(MotionDetectorSensor[OpenCVStorageValues]):
                 self.storage.values["background_substraction_learning_rate"],
             )
 
-        else:  # Default model
+        else:
             blur = self.storage.values["default_blur"]
-            # Ensure blur is odd
             if blur % 2 == 0:
                 blur += 1
 
@@ -262,7 +254,6 @@ class OpenCVMotionSensor(MotionDetectorSensor[OpenCVStorageValues]):
             )
             self._prev_frame = blurred_frame
 
-        # Convert detections to normalized format
         width = frame["width"]
         height = frame["height"]
 
@@ -312,7 +303,6 @@ class OpenCVMotionSensor(MotionDetectorSensor[OpenCVStorageValues]):
             await self.storage.setValue("background_substraction_area", DEFAULT_AREA_BS)
             await self.storage.setValue("background_substraction_threshold", DEFAULT_THRESHOLD_BS)
             await self.storage.setValue("background_substraction_learning_rate", DEFAULT_LEARNING_RATE)
-        # Reset the background subtractor
         self._back_sub = None
 
     async def _reset_fd_settings(self) -> None:

@@ -32,16 +32,13 @@ class Wyze(BasePlugin[WyzeConfig], DiscoveryProvider):
     def __init__(self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage[WyzeConfig]) -> None:
         super().__init__(logger, api, storage)
 
-        # Wyzeapy client
         self._wyze_client: Wyzeapy | None = None
         self._camera_service: CameraService | None = None
 
-        # Camera tracking
         self._wyze_cameras: dict[str, WyzeCamera] = {}  # mac -> WyzeCamera
         self._camera_controllers: dict[str, Camera] = {}  # mac -> Camera
         self._existing_cameras: dict[str, CameraDevice] = {}  # cameraId -> CameraDevice
 
-        # Event handlers
         self.api.on(API_EVENT.FINISH_LAUNCHING, self._start)
         self.api.on(API_EVENT.SHUTDOWN, self._stop)
 
@@ -117,14 +114,12 @@ class Wyze(BasePlugin[WyzeConfig], DiscoveryProvider):
     async def onAdoptCamera(
         self, camera: DiscoveredCamera, cameraSettings: dict[str, object]
     ) -> CameraConfig:
-        # Extract MAC from discovery ID (wyze:MAC)
         mac = camera["id"].replace("wyze:", "")
         wyze_camera = self._wyze_cameras.get(mac)
 
         if not wyze_camera:
             raise ValueError(f"Wyze camera {mac} not found")
 
-        # Build go2rtc wyze:// URL
         stream_url = self._build_wyze_url(wyze_camera)
         sd_url = self._build_wyze_url(wyze_camera, subtype="sd")
 
@@ -169,7 +164,6 @@ class Wyze(BasePlugin[WyzeConfig], DiscoveryProvider):
     async def onCameraAdded(self, camera: CameraDevice) -> None:
         self._existing_cameras[camera.id] = camera
 
-        # Find corresponding Wyze camera
         mac = camera.nativeId
         if not mac:
             self.logger.warn(f"Camera {camera.name} has no nativeId")
@@ -184,7 +178,6 @@ class Wyze(BasePlugin[WyzeConfig], DiscoveryProvider):
         if camera_device and camera_device.nativeId:
             self._camera_controllers.pop(camera_device.nativeId, None)
 
-            # Push back to discovery
             wyze_camera = self._wyze_cameras.get(camera_device.nativeId)
             if wyze_camera:
                 await self.api.deviceManager.pushDiscoveredCameras([self._to_discovered_camera(wyze_camera)])
@@ -205,7 +198,6 @@ class Wyze(BasePlugin[WyzeConfig], DiscoveryProvider):
     async def _connect(self) -> None:
         self._wyze_client = await Wyzeapy.create()
 
-        # Login with stored token or credentials
         token = None
         access_token: str | None = self.storage.values.get("accessToken")
         refresh_token: str | None = self.storage.values.get("refreshToken")
@@ -221,10 +213,8 @@ class Wyze(BasePlugin[WyzeConfig], DiscoveryProvider):
             token,
         )
 
-        # Register for token updates
         self._wyze_client.register_for_token_callback(self._on_token_update)
 
-        # Fetch cameras
         self._camera_service = await self._wyze_client.camera_service
         cameras = await self._camera_service.get_cameras()
 
@@ -239,10 +229,8 @@ class Wyze(BasePlugin[WyzeConfig], DiscoveryProvider):
         for camera in cameras:
             self._wyze_cameras[camera.mac] = camera
 
-            # Initialize existing cameras
             await self._initialize_existing_camera(camera)
 
-        # Push to discovery
         await self._push_discovered_cameras()
 
     async def _initialize_existing_camera(self, wyze_camera: WyzeCamera) -> None:
@@ -250,7 +238,6 @@ class Wyze(BasePlugin[WyzeConfig], DiscoveryProvider):
         if mac in self._camera_controllers:
             return
 
-        # Find existing camera device by nativeId
         camera_device = next((c for c in self._existing_cameras.values() if c.nativeId == mac), None)
 
         if camera_device and self._camera_service:
@@ -277,7 +264,6 @@ class Wyze(BasePlugin[WyzeConfig], DiscoveryProvider):
         discovered: list[DiscoveredCamera] = []
 
         for mac, wyze_camera in self._wyze_cameras.items():
-            # Skip if already added
             if any(c.nativeId == mac for c in self._existing_cameras.values()):
                 continue
 
@@ -321,10 +307,8 @@ class Wyze(BasePlugin[WyzeConfig], DiscoveryProvider):
             self.storage.values = values
             self.storage.save()
 
-            # Register for token updates
             self._wyze_client.register_for_token_callback(self._on_token_update)
 
-            # Fetch cameras
             self._camera_service = await self._wyze_client.camera_service
             cameras = await self._camera_service.get_cameras()
             await self._update_discovered_cameras(cameras)

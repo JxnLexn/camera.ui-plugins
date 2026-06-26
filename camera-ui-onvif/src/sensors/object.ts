@@ -2,10 +2,8 @@ import { ObjectSensor } from '@camera.ui/sdk';
 
 import type { CameraDevice, TrackedDetection } from '@camera.ui/sdk';
 
-/** Object detection categories handled by this sensor */
 type ObjectCategory = 'person' | 'vehicle' | 'animal';
 
-/** Detection data for object events */
 interface ObjectDetectionData {
   category: ObjectCategory;
   isDetected: boolean;
@@ -34,8 +32,7 @@ export class OnvifObjectSensor extends ObjectSensor {
       return;
     }
 
-    // ONVIF events don't include bounding boxes — synthesize one full-frame
-    // detection per active category so labels are correctly auto-derived.
+    // ONVIF events lack bounding boxes — synthesize a full-frame detection per category for labels.
     const detections: TrackedDetection[] = Array.from(this.activeCategories).map((category) => ({
       label: category,
       confidence: 1,

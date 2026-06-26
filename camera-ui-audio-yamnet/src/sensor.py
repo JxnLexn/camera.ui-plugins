@@ -106,19 +106,15 @@ class YAMNetAudioSensor(AudioDetectorSensor[YAMNetStorageValues]):
         if self._detector is None or not self._detector.initialized:
             return {"detected": False, "detections": []}
 
-        # Convert audio data to float32 waveform
         waveform: np.ndarray[Any, Any] = np.frombuffer(audio["data"], dtype=np.float32)
 
         self._frame_count += 1
 
-        # Calculate RMS and dBFS
         rms = float(np.sqrt(np.mean(waveform**2)))
         dbfs = 20 * math.log10(max(rms, 1e-10)) if rms > 0 else -100.0
 
-        # Run YAMNet inference
         scores = await self._detector.detect(waveform)
 
-        # Filter by listen labels and threshold, mapping to standardized labels
         detections: list[Detection] = []
         for label, score in scores:
             if label in self._listen_set and score >= self._threshold:
@@ -156,7 +152,6 @@ class YAMNetAudioSensor(AudioDetectorSensor[YAMNetStorageValues]):
             self._detector = AudioDetector(self._api, self._logger)
             await self._detector.initialize()
 
-            # Update available labels from loaded model
             if self._detector.labels:
                 self._available_labels.clear()
                 self._available_labels.extend(self._detector.labels)

@@ -16,14 +16,11 @@ import type {
 import type { Onvif } from '@seydx/onvif';
 
 interface OnvifDiscoveredDevice {
-  // DiscoveredCamera fields
   id: string;
   name: string;
   model?: string;
-  // Metadata
   onvif: Onvif;
   urn?: string;
-  // Credentials (set during adoption, used in onCameraAdded)
   username?: string;
   password?: string;
 }
@@ -31,10 +28,8 @@ interface OnvifDiscoveredDevice {
 export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider {
   private cameras = new Map<string, OnvifCamera>();
 
-  /** Cameras already added to camera.ui (cameraDeviceId -> CameraDevice) */
   private existingCameras = new Map<string, CameraDevice>();
 
-  /** Discovered ONVIF devices (before adoption) */
   private discoveredDevices = new Map<string, OnvifDiscoveredDevice>();
 
   constructor(logger: LoggerService, api: PluginAPI, storage: DeviceStorage<any>) {
@@ -53,12 +48,10 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
   public async onCameraAdded(camera: CameraDevice): Promise<void> {
     this.existingCameras.set(camera.id, camera);
 
-    // Get credentials from discovered device if this is a newly adopted camera
     let initialCredentials: { username: string; password: string; url: string } | undefined;
     if (camera.nativeId) {
       const device = this.discoveredDevices.get(camera.nativeId);
       if (device?.username && device?.password) {
-        // Build ONVIF URL from device info
         const onvifUrl = `http://${device.onvif.hostname}:${device.onvif.port}`;
         initialCredentials = {
           username: device.username,
@@ -83,7 +76,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       this.cameras.delete(cameraId);
     }
 
-    // Push the camera back as discovered immediately
     if (cameraDevice?.nativeId) {
       const device = this.discoveredDevices.get(cameraDevice.nativeId);
       if (device) {
@@ -117,7 +109,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       this.logger.error('ONVIF discovery scan failed:', error);
     }
 
-    // Filter out cameras that are already added to camera.ui
     const discovered: DiscoveredCamera[] = [];
     for (const [discoveredId, device] of this.discoveredDevices) {
       const existingCamera = Array.from(this.existingCameras.values()).find((c) => c.nativeId === discoveredId);
@@ -168,7 +159,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       throw new Error('Username and password are required');
     }
 
-    // Set credentials and connect
     onvif.username = username;
     onvif.password = password;
 
@@ -179,7 +169,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
     const deviceInfo = await onvif.device.getDeviceInformation();
     const cameraName = deviceInfo?.model ? `${deviceInfo.manufacturer ?? 'ONVIF'} ${deviceInfo.model}` : camera.name;
 
-    // Get all media sources using the new categorized method
     const media = await onvif.media.getMediaSources();
 
     if (media.sources.length === 0) {
@@ -188,7 +177,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
 
     this.logger.log(`ONVIF device connected: ${cameraName} (${media.sources.length} stream(s))`);
 
-    // Build camera config with categorized streams
     const config: CameraConfig = {
       name: cameraName,
       nativeId: camera.id,
@@ -202,7 +190,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       sources: [],
     };
 
-    // High resolution stream
     if (media.high) {
       const safeName = media.high.profileName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
       config.sources.push({
@@ -216,7 +203,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       });
     }
 
-    // Mid resolution stream (if available)
     if (media.mid) {
       const safeName = media.mid.profileName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
       config.sources.push({
@@ -230,7 +216,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       });
     }
 
-    // Low resolution stream (if available)
     if (media.low) {
       const safeName = media.low.profileName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
       config.sources.push({
@@ -244,9 +229,7 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       });
     }
 
-    // Snapshot source - dedicated HTTP URL or JPEG RTSP stream
     if (media.snapshot?.snapshotUri) {
-      // Dedicated HTTP Snapshot URL available
       config.sources.push({
         name: 'snapshot',
         role: 'snapshot',
@@ -257,7 +240,7 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
         prebuffer: false,
       });
     } else if (media.snapshot?.isSnapshot) {
-      // JPEG RTSP Stream as snapshot fallback (e.g., Tapo cameras)
+      // JPEG RTSP stream as snapshot fallback (e.g. Tapo cameras)
       const safeName = media.snapshot.profileName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
       config.sources.push({
         name: safeName,
@@ -270,12 +253,10 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       });
     }
 
-    // Store credentials in device for onCameraAdded to use
     device.username = username;
     device.password = password;
 
-    // Keep discoveredDevices so we can push it back if camera is released
-    // Credentials will be cleared in onCameraAdded after being saved to storage
+    // Kept in discoveredDevices for re-push on release; creds cleared in onCameraAdded after save.
 
     return config;
   }
@@ -288,20 +269,17 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
   }
 
   private async processDiscoveredDevice(device: Onvif): Promise<void> {
-    // Use URN or hostname:port as unique ID
     const id = device.urn ?? `onvif-${device.hostname}-${device.port}`;
 
-    // Skip if already discovered
     if (this.discoveredDevices.has(id)) {
       return;
     }
 
-    // Use discoveryInfo from WS-Discovery (available WITHOUT authentication)
+    // discoveryInfo comes from WS-Discovery and is available without authentication.
     const discoveryInfo = device.discoveryInfo;
     const infoName = discoveryInfo?.name?.trim();
     const infoHardware = discoveryInfo?.hardware?.trim();
 
-    // Build camera name from discoveryInfo
     let name: string;
     if (infoName && infoHardware) {
       if (infoName === infoHardware) {
@@ -323,7 +301,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
 
     const model = infoHardware;
 
-    // Store discovered device with all info
     this.discoveredDevices.set(id, {
       id,
       name,
@@ -340,7 +317,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       url.password = encodeURIComponent(password);
       return url.toString();
     } catch {
-      // If URL parsing fails, try simple string replacement
       const protocol = uri.split('://')[0];
       const rest = uri.substring(protocol.length + 3);
       return `${protocol}://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${rest}`;

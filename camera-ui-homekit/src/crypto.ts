@@ -2,10 +2,7 @@ import crypto from 'node:crypto';
 
 if (!crypto.getCiphers().includes('chacha20-poly1305')) {
   try {
-    // Lazy-import: only load the chacha polyfill when native support is missing
-    // (e.g. Electron with a stripped OpenSSL build). Avoids Buffer() deprecation
-    // warning on platforms that don't need it.
-
+    // chacha polyfill for builds without native chacha20-poly1305 (e.g. Electron's stripped OpenSSL)
     const chacha = require('chacha');
 
     const originalGetCiphers = crypto.getCiphers;

@@ -225,8 +225,7 @@ class NCNNPlugin(
     async def get_plate_detector(self, model_name: str) -> BoxDetector:
         detector = self.plate_detectors.get(model_name)
         if not detector:
-            # ncnn plate graph is cut at the raw YOLOv9 head (end2end NMS tail can't
-            # convert) → raw single-class [5,N], so apply NMS to dedupe candidates.
+            # Plate graph is cut at the raw YOLOv9 head (no end2end NMS), so apply NMS.
             detector = BoxDetector(
                 self.model_manager,
                 self.logger,

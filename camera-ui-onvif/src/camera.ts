@@ -43,9 +43,7 @@ export class OnvifCamera {
   }
 
   async initialize(initialCredentials?: { username: string; password: string; url: string }): Promise<void> {
-    // If initial credentials provided (newly adopted camera), save them to storage.
-    // Suppress onSet-triggered reconnects while writing all 3 fields — we'll call
-    // connect() ourselves below once state is consistent.
+    // Suppress onSet-triggered reconnects while writing all 3 fields; connect() is called below.
     if (initialCredentials) {
       this.suppressReconnect = true;
       try {
@@ -58,7 +56,6 @@ export class OnvifCamera {
       }
     }
 
-    // Try to connect with stored credentials
     const values = this.storage.values;
     if (!values?.username || !values?.password || !values?.url) {
       this.camera.logger.attention('Please configure the ONVIF settings');
@@ -73,7 +70,6 @@ export class OnvifCamera {
       this.device = await this.connectToDevice(url, username, password);
       this.camera.logger.log('Connected to ONVIF device');
 
-      // Notify backend that camera is connected
       this.camera.connect();
 
       this.capabilities = await this.detectCapabilities();
@@ -83,12 +79,10 @@ export class OnvifCamera {
         this.camera.logger.log('Advertised detection types:', this.capabilities.advertisedTypes.join(', '));
       }
 
-      // Set up PTZ sensor if supported
       if (this.capabilities.hasPTZ) {
         await this.setupPTZSensor(this.device);
       }
 
-      // Set up event-based sensors based on advertised capabilities
       if (this.capabilities.hasEvents && this.capabilities.advertisedTypes.length > 0) {
         await this.setupEventSensors();
         this.updateEventLoop();
@@ -102,7 +96,6 @@ export class OnvifCamera {
     this.ptzSensor = new OnvifPTZSensor(this.camera, device);
     await this.camera.addSensor(this.ptzSensor);
 
-    // Subscribe to assignment changes
     this.ptzSensor.onAssignmentChanged.subscribe((assigned) => {
       if (assigned) {
         this.ptzSensor!.initialize();
@@ -110,7 +103,6 @@ export class OnvifCamera {
       }
     });
 
-    // Initialize immediately if already assigned
     if (this.ptzSensor.isAssigned) {
       await this.ptzSensor.initialize();
     }
@@ -137,7 +129,6 @@ export class OnvifCamera {
       return;
     }
 
-    // Stop existing event loop
     if (this.device) {
       this.device.events.stopEventLoop();
     }
@@ -154,28 +145,24 @@ export class OnvifCamera {
   private async setupEventSensors(): Promise<void> {
     const types = this.capabilities?.advertisedTypes ?? [];
 
-    // Motion sensor - if camera advertises motion detection
     if (types.includes('motion')) {
       this.motionSensor = new OnvifMotionSensor(this.camera);
       await this.camera.addSensor(this.motionSensor);
       this.motionSensor.onAssignmentChanged.subscribe(() => this.updateEventLoop());
     }
 
-    // Object sensor - if camera advertises person, vehicle, or animal detection
     if (types.includes('person') || types.includes('vehicle') || types.includes('animal')) {
       this.objectSensor = new OnvifObjectSensor(this.camera);
       await this.camera.addSensor(this.objectSensor);
       this.objectSensor.onAssignmentChanged.subscribe(() => this.updateEventLoop());
     }
 
-    // Face sensor - if camera advertises face detection
     if (types.includes('face')) {
       this.faceSensor = new OnvifFaceSensor(this.camera);
       await this.camera.addSensor(this.faceSensor);
       this.faceSensor.onAssignmentChanged.subscribe(() => this.updateEventLoop());
     }
 
-    // Audio sensor - if camera advertises audio detection
     if (types.includes('audio')) {
       this.audioSensor = new OnvifAudioSensor(this.camera);
       await this.camera.addSensor(this.audioSensor);
@@ -218,7 +205,6 @@ export class OnvifCamera {
   }
 
   private handleEvent(message: NotificationMessage, capabilities: OnvifCapabilities): void {
-    // Try to parse as motion event
     const motionData = parseMotionEvent(message);
     if (motionData && this.motionSensor) {
       this.motionSensor.handleMotion(motionData);
@@ -226,7 +212,6 @@ export class OnvifCamera {
       return;
     }
 
-    // Try to parse as detection event (face, person, vehicle, animal)
     const detectionData = parseDetectionEvent(message);
     if (detectionData) {
       this.trackDynamicCapability(detectionData.category, capabilities);
@@ -243,7 +228,6 @@ export class OnvifCamera {
       return;
     }
 
-    // Try to parse as audio event
     const audioData = parseAudioEvent(message);
     if (audioData && this.audioSensor) {
       this.audioSensor.handleAudio(audioData);
@@ -296,7 +280,7 @@ export class OnvifCamera {
         eventProperties = await this.device.events.getEventProperties();
         advertisedTypes = getSupportedDetectionTypes(eventProperties);
       } catch {
-        // Failed to get event properties
+        // ignore
       }
     }
 

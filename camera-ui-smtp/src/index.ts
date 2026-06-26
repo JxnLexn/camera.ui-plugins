@@ -81,7 +81,6 @@ export default class SMTPPlugin extends BasePlugin<StorageValues> {
   }
 
   private async initializeCamera(camera: CameraDevice): Promise<void> {
-    // Create and register the motion sensor
     const sensor = new SMTPMotionSensor();
     await camera.addSensor(sensor);
 
@@ -139,7 +138,6 @@ export default class SMTPPlugin extends BasePlugin<StorageValues> {
       if (!addresses) continue;
 
       for (const address of addresses.value) {
-        // Find all cameras with sensors configured for this email
         const matchingEntries = Array.from(this.cameras.values()).filter((entry) => entry.sensor.email === address.address);
 
         if (matchingEntries.length === 0) {
@@ -150,12 +148,10 @@ export default class SMTPPlugin extends BasePlugin<StorageValues> {
         for (const { sensor } of matchingEntries) {
           const { onText, offText } = sensor;
 
-          // Check for motion on pattern (or trigger if no pattern specified)
           if (!onText || parsed.text?.includes(onText)) {
             sensor.reportDetections(true);
           }
 
-          // Check for motion off pattern
           if (offText && parsed.text?.includes(offText)) {
             sensor.reportDetections(false);
           }

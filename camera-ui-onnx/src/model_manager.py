@@ -16,8 +16,7 @@ from defaults import (
 )
 from inference import OnnxBackend
 
-# An onnxruntime provider list, e.g. ["CUDAExecutionProvider", "CPUExecutionProvider"]
-# or [("CUDAExecutionProvider", {"device_id": 0}), "CPUExecutionProvider"].
+# onnxruntime provider list, e.g. ["CUDAExecutionProvider", "CPUExecutionProvider"]
 ProviderList = Sequence[Any]
 
 

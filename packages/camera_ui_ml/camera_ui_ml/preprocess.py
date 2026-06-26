@@ -48,7 +48,7 @@ def to_tensor(rgb: NDArray, spec: InputSpec) -> NDArray:
         arr = resized.astype(np.float32) / 255.0
     elif spec.normalize == "facenet":
         arr = (resized.astype(np.float32) - 127.5) / 128.0
-    else:  # "none"
+    else:
         arr = resized.astype(np.uint8 if spec.dtype == "uint8" else np.float32)
 
     if spec.layout == "nchw":

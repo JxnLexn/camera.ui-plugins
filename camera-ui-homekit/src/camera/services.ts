@@ -130,17 +130,13 @@ export class CameraServices extends Subscribed {
   private cameraDevice: CameraDevice;
   private cameraLogger: LoggerService;
 
-  // Subscriptions
   private sensorAddedSub?: Disposable;
   private sensorRemovedSub?: Disposable;
 
-  // Track subscriptions for each sensor (property changes)
   private sensorSubscriptions = new Map<string, Disposable>();
 
-  // Track capability subscriptions for each sensor
   private capabilitySubscriptions = new Map<string, Disposable>();
 
-  // Track services by sensor ID (for multi-provider types)
   private sensorServices = new Map<string, Service>();
 
   constructor(accessory: Accessory, cameraDevice: CameraDevice) {
@@ -152,11 +148,9 @@ export class CameraServices extends Subscribed {
 
     this.cameraLogger.debug('Adding services');
 
-    // Set up sensor lifecycle listeners
     this.sensorAddedSub = this.cameraDevice.onSensorAdded.subscribe(({ sensorId, sensorType }) => this.handleSensorAdded(sensorId, sensorType));
     this.sensorRemovedSub = this.cameraDevice.onSensorRemoved.subscribe(({ sensorId, sensorType }) => this.handleSensorRemoved(sensorId, sensorType));
 
-    // Initialize services for existing sensors
     this.initializeServices();
   }
 
@@ -164,13 +158,11 @@ export class CameraServices extends Subscribed {
     this.sensorAddedSub?.dispose();
     this.sensorRemovedSub?.dispose();
 
-    // Cleanup all sensor subscriptions
     for (const sub of this.sensorSubscriptions.values()) {
       sub.dispose();
     }
     this.sensorSubscriptions.clear();
 
-    // Cleanup all capability subscriptions
     for (const sub of this.capabilitySubscriptions.values()) {
       sub.dispose();
     }
@@ -207,21 +199,18 @@ export class CameraServices extends Subscribed {
   }
 
   private handleSensorRemoved(sensorId: string, sensorType: SensorType): void {
-    // Cleanup sensor property subscription
     const sub = this.sensorSubscriptions.get(sensorId);
     if (sub) {
       sub.dispose();
       this.sensorSubscriptions.delete(sensorId);
     }
 
-    // Cleanup sensor capability subscription
     const capSub = this.capabilitySubscriptions.get(sensorId);
     if (capSub) {
       capSub.dispose();
       this.capabilitySubscriptions.delete(sensorId);
     }
 
-    // Only remove services for multi-provider types
     const service = this.sensorServices.get(sensorId);
     if (service) {
       this.cameraLogger.debug(`Removing ${sensorType} service for sensor: ${sensorId}`);
@@ -247,7 +236,6 @@ export class CameraServices extends Subscribed {
 
       service = this.accessory.addService(config.serviceType, displayName, subtype);
 
-      // Set up change listeners and onSet handlers for each binding
       for (const binding of config.bindings) {
         const char = service.getCharacteristic(binding.characteristic);
 
@@ -264,7 +252,6 @@ export class CameraServices extends Subscribed {
         });
       }
 
-      // Set up trigger change listener (e.g. doorbell ring)
       if (config.trigger) {
         service.getCharacteristic(config.trigger.characteristic).on('change', (change) => {
           if (change.oldValue !== change.newValue) {
@@ -277,22 +264,18 @@ export class CameraServices extends Subscribed {
       this.sensorServices.set(sensorId, service);
     }
 
-    // Set initial values for property bindings
     for (const binding of config.bindings) {
       const raw = (sensor.getValue(binding.property) as CharacteristicValue | undefined) ?? binding.defaultValue;
       const value = binding.toHAP ? binding.toHAP(raw) : raw;
       service.getCharacteristic(binding.characteristic).updateValue(value);
     }
 
-    // Subscribe to property changes
     const sub = sensor.onPropertyChanged.subscribe(({ property, value }) => {
-      // Handle trigger bindings (event-based, e.g. doorbell)
       if (property === config.trigger?.property && value === true) {
         service.getCharacteristic(config.trigger.characteristic).updateValue(config.trigger.triggerValue);
         return;
       }
 
-      // Handle property bindings (state-based)
       for (const binding of config.bindings) {
         if (property === binding.property) {
           const hapValue = binding.toHAP ? binding.toHAP(value) : value;
@@ -321,11 +304,9 @@ export class CameraServices extends Subscribed {
       this.services.push(motionService);
     }
 
-    // Get initial state
     const detected = sensor.getValue(MotionProperty.Detected) ?? false;
     motionService.getCharacteristic(Characteristic.MotionDetected).updateValue(detected);
 
-    // Subscribe via onSensorProperty for cleaner single-provider pattern
     const sub = this.cameraDevice.onSensorProperty<boolean>(SensorType.Motion, MotionProperty.Detected, (value) => {
       motionService.getCharacteristic(Characteristic.MotionDetected).updateValue(value);
     });
@@ -337,7 +318,6 @@ export class CameraServices extends Subscribed {
     const sensorId = sensor.id;
     let batteryService = this.accessory.getService(Service.Battery);
 
-    // Helper to add ChargingState characteristic dynamically
     const addChargingStateCharacteristic = (service: Service): void => {
       if (!service.testCharacteristic(Characteristic.ChargingState)) {
         this.cameraLogger.debug('Adding ChargingState characteristic to battery');
@@ -349,7 +329,6 @@ export class CameraServices extends Subscribed {
           }
         });
 
-        // Set initial charging value
         const charging = sensor.getValue(BatteryProperty.Charging) ?? ChargingState.NotChargeable;
         const isCharging = charging === ChargingState.Charging;
         const chargingState = isCharging ? Characteristic.ChargingState.CHARGING : Characteristic.ChargingState.NOT_CHARGING;
@@ -386,13 +365,11 @@ export class CameraServices extends Subscribed {
       this.services.push(batteryService);
     }
 
-    // Get initial state
     const level = sensor.getValue(BatteryProperty.Level) ?? 100;
     const low = sensor.getValue(BatteryProperty.Low) ?? false;
     const charging = sensor.hasCapability(BatteryCapability.Charging) ? (sensor.getValue(BatteryProperty.Charging) ?? ChargingState.NotChargeable) : undefined;
     this.updateBatteryValues(batteryService, level, low, charging);
 
-    // Subscribe to property changes directly on the sensor
     const sub = sensor.onPropertyChanged.subscribe(({ property, value }) => {
       const currentLevel = property === BatteryProperty.Level ? value : (sensor.getValue(BatteryProperty.Level) ?? 100);
       const currentLow = property === BatteryProperty.Low ? value : (sensor.getValue(BatteryProperty.Low) ?? false);
@@ -406,7 +383,6 @@ export class CameraServices extends Subscribed {
     });
     this.sensorSubscriptions.set(sensorId, sub);
 
-    // Subscribe to capability changes - add ChargingState characteristic dynamically if capability is added
     const capSub = sensor.onCapabilitiesChanged.subscribe((capabilities) => {
       if (capabilities.includes(BatteryCapability.Charging)) {
         addChargingStateCharacteristic(batteryService);
@@ -428,8 +404,6 @@ export class CameraServices extends Subscribed {
     }
   }
 
-  // ============ Light Service (Multi Provider, dynamic capabilities) ============
-
   private addLightServiceForSensor(sensor: LightControlLike): void {
     const sensorId = sensor.id;
     const displayName = sensor.name;
@@ -437,7 +411,6 @@ export class CameraServices extends Subscribed {
 
     let lightService = this.accessory.getServiceById(Service.Lightbulb, subtype);
 
-    // Helper to add brightness characteristic dynamically
     const addBrightnessCharacteristic = (service: Service): void => {
       if (!service.testCharacteristic(Characteristic.Brightness)) {
         this.cameraLogger.debug(`Adding brightness characteristic to light: ${displayName}`);
@@ -454,7 +427,6 @@ export class CameraServices extends Subscribed {
             }
           });
 
-        // Set initial brightness value
         const brightness = sensor.getValue(LightProperty.Brightness) ?? 100;
         service.getCharacteristic(Characteristic.Brightness).updateValue(brightness);
       }
@@ -485,7 +457,6 @@ export class CameraServices extends Subscribed {
       this.sensorServices.set(sensorId, lightService);
     }
 
-    // Set initial state
     const on = sensor.getValue(LightProperty.On) ?? false;
     lightService.getCharacteristic(Characteristic.On).updateValue(on);
 
@@ -494,7 +465,6 @@ export class CameraServices extends Subscribed {
       lightService.getCharacteristic(Characteristic.Brightness).updateValue(brightness);
     }
 
-    // Subscribe to property changes directly on the sensor
     const sub = sensor.onPropertyChanged.subscribe(({ property, value }) => {
       if (property === LightProperty.On) {
         lightService.getCharacteristic(Characteristic.On).updateValue(value);
@@ -504,7 +474,6 @@ export class CameraServices extends Subscribed {
     });
     this.sensorSubscriptions.set(sensorId, sub);
 
-    // Subscribe to capability changes - add brightness characteristic dynamically if capability is added
     const capSub = sensor.onCapabilitiesChanged.subscribe((capabilities) => {
       if (capabilities.includes(LightCapability.Brightness)) {
         addBrightnessCharacteristic(lightService);

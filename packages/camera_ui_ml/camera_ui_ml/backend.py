@@ -15,8 +15,6 @@ Layout = Literal["nchw", "nhwc"]
 Normalize = Literal["unit", "facenet", "none"]
 DType = Literal["float32", "uint8"]
 
-# Inference outputs in model output order; detectors index `outputs[0]` for the
-# primary output (OCR scans all outputs, CLIP uses the single embedding output).
 Outputs = Sequence[NDArray]
 
 
@@ -25,7 +23,7 @@ class InputSpec:
     width: int
     height: int
     layout: Layout = "nchw"
-    normalize: Normalize = "unit"  # "unit" = /255, "facenet" = (x-127.5)/128, "none" = raw
+    normalize: Normalize = "unit"
     dtype: DType = "float32"
 
 
@@ -39,8 +37,7 @@ class InferenceBackend(ABC):
 
     @property
     def device(self) -> str:
-        """Human-readable hardware this backend actually runs on (e.g. "CUDA:0",
-        "GPU", "Neural Engine", "CPU")"""
+        """Human-readable hardware this backend runs on (e.g. "CUDA:0", "CPU")."""
         return "unknown"
 
     @abstractmethod
@@ -50,11 +47,7 @@ class InferenceBackend(ABC):
     def close(self) -> None: ...
 
     def adapt(self, image: NDArray, spec: InputSpec) -> Sequence[Any]:
-        """Realize the canonical HWC uint8 RGB image into runtime model inputs.
-
-        Default: one normalized tensor per ``spec`` (onnx/openvino/ncnn). CoreML
-        image-input models override this to pass a PIL image instead. Runs on the
-        shared prepare-executor (CPU)."""
+        """Realize the canonical HWC uint8 RGB image into runtime model inputs."""
         from .preprocess import to_tensor
 
         return [to_tensor(image, spec)]

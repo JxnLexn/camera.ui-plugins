@@ -259,8 +259,7 @@ class CoreMLPlugin(
     async def get_plate_detector(self, model_name: str) -> BoxDetector:
         detector = self.plate_detectors.get(model_name)
         if not detector:
-            # CoreML plate output is raw single-class YOLOv9 [1,5,N] (no in-graph NMS) →
-            # apply NMS so overlapping candidates for one plate don't leak as duplicates.
+            # CoreML plate output is raw single-class YOLOv9 [1,5,N] with no in-graph NMS, so apply NMS.
             detector = BoxDetector(
                 self.model_manager,
                 self.logger,

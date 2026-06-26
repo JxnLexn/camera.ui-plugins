@@ -17,9 +17,7 @@ export class EufyP2PSource implements Source {
     this.closed = false;
     const stream = await this.manager.getLocalLivestream();
 
-    // The consumer may have given up while the (slow) P2P negotiation was still in
-    // flight. Don't build a source nobody will ever close — release the livestream
-    // and abort the open instead.
+    // Consumer may have given up during the slow P2P negotiation — release the livestream and abort.
     if (this.closed) {
       this.manager.stopLocalLiveStream();
       throw new Error('EufyP2PSource closed during open');

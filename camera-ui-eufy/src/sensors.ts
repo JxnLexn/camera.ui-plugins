@@ -19,7 +19,6 @@ export class EufyBatteryInfo extends BatteryInfo {
   constructor() {
     super('Eufy Battery');
 
-    // Eufy cameras support low battery and charging detection
     this.capabilities = [BatteryCapability.LowBattery, BatteryCapability.Charging];
   }
 

@@ -50,8 +50,7 @@ class BaseDetector:
             self._init_task = None
 
     async def _configure(self, model_name: str) -> None:
-        """Read model-derived config (input size, labels) from ``self.backend``.
-        Overridden by subclasses that need it; the default is a no-op."""
+        """Read model-derived config (input size, labels) from ``self.backend``."""
 
     def _ready(self) -> bool:
         return self.initialized and self.backend is not None

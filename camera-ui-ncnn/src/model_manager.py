@@ -18,8 +18,7 @@ from defaults import (
 )
 from inference import NcnnBackend
 
-# Box-detector input px by model name. The pnnx-converted .param carries no input
-# dims, so the size comes from the model registry; embedder/OCR set their own size.
+# pnnx-converted .param carries no input dims; sizes come from the registry.
 _BOX_INPUT_SIZES = {**OBJECT_MODELS, **FACE_DETECTOR_MODELS, **LPD_DETECTOR_MODELS}
 
 
@@ -60,7 +59,6 @@ class NcnnModelManager(BaseModelManager):
 
 
 def _box_input_size(model_name: str) -> tuple[int, int]:
-    # Box detectors (object/face/plate) are square; embedder/OCR aren't in the
-    # registry and set their own input size, so (0, 0) for them is harmless.
+    # Embedder/OCR aren't in the registry; (0, 0) is harmless for them.
     px = _BOX_INPUT_SIZES.get(model_name, 0)
     return (px, px)

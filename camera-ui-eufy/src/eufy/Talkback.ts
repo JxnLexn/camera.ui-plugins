@@ -61,7 +61,6 @@ export class TalkbackStream extends Duplex {
   }
 
   public stopTalkbackStream(): void {
-    // remove event listeners
     this.eufyClient.removeListener('station talkback start', this.onTalkbackStarted.bind(this));
     this.eufyClient.removeListener('station talkback stop', this.onTalkbackStopped.bind(this));
 

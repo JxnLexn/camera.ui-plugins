@@ -66,12 +66,8 @@ OCR_INPUT_HEIGHT = 64
 
 CLIP_EMBEDDING_DIM = 512
 
-# The OpenVINO IR has no embedded class names (unlike the ONNX variant), so
-# object/face labels are hardcoded to match the trained classes.
+# OpenVINO IR carries no class names; labels are hardcoded to the trained classes.
 OBJECT_LABELS: dict[int, DetectionLabel] = {0: "person", 1: "vehicle", 2: "animal"}
 
-# OpenVINO device selection (plugin-level setting).
-# "Default" auto-detects hardware and builds a smart AUTO string (e.g. AUTO:NPU,GPU,CPU);
-# "AUTO" lets OpenVINO choose; CPU/GPU/NPU force a specific device.
 OPENVINO_DEVICES = ["Default", "AUTO", "CPU", "GPU", "NPU"]
 DEFAULT_OPENVINO_DEVICE = "Default"

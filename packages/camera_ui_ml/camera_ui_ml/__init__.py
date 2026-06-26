@@ -49,7 +49,6 @@ from .preprocess import (
 )
 
 __all__ = [
-    # backend seam
     "InferenceBackend",
     "InputSpec",
     "Outputs",
@@ -57,9 +56,8 @@ __all__ = [
     "Layout",
     "Normalize",
     "DType",
-    # model manager
     "BaseModelManager",
-    # detectors (ClipEncoder is opt-in via camera_ui_ml.detectors.clip)
+    # ClipEncoder is opt-in via camera_ui_ml.detectors.clip
     "BaseDetector",
     "BoxDetector",
     "NormalizedDetection",
@@ -67,7 +65,6 @@ __all__ = [
     "Embedder",
     "PlateOcr",
     "OcrResult",
-    # geometry
     "Box",
     "NormalizedBox",
     "cxcywh_to_xyxy",
@@ -75,7 +72,6 @@ __all__ = [
     "clamp_box",
     "normalize_box",
     "pad_box",
-    # parsing
     "RawDetection",
     "channels_first",
     "parse_yolov9",
@@ -83,17 +79,14 @@ __all__ = [
     "decode_ocr",
     "l2_normalize",
     "nms",
-    # preprocess
     "frame_to_rgb",
     "resize_rgb",
     "to_pil",
     "to_tensor",
     "crop_rgb",
     "decode_image",
-    # pipeline
     "run_prepare",
     "prepare_executor",
-    # orchestration
     "detect_objects",
     "detect_faces",
     "detect_plates",

@@ -20,13 +20,8 @@ import type { RingCamera } from './ring-client-api.js';
 import type { RingHome, StorageValues } from './types.js';
 
 export default class RingPlugin extends BasePlugin<StorageValues> implements DiscoveryProvider {
-  /** Initialized camera controllers (ringCameraId -> Camera) */
   private ringCameras = new Map<string, Camera>();
-
-  /** Ring cameras discovered from Ring API (ringCameraId -> RingCamera) */
   private discoveredRingCameras = new Map<string, RingCamera>();
-
-  /** Cameras already added to camera.ui (cameraDeviceId -> CameraDevice) */
   private existingCameras = new Map<string, CameraDevice>();
 
   private restClients = new Map<string, RingRestClient>();
@@ -141,14 +136,12 @@ export default class RingPlugin extends BasePlugin<StorageValues> implements Dis
   public async configureCameras(cameras: CameraDevice[]): Promise<void> {
     for (const camera of cameras) {
       this.existingCameras.set(camera.id, camera);
-      // Note: onCameraAdded will be called when Ring API connects and ring camera is available
     }
   }
 
   public async onCameraAdded(camera: CameraDevice): Promise<void> {
     this.existingCameras.set(camera.id, camera);
 
-    // Find the corresponding Ring camera by nativeId
     const ringCameraId = camera.nativeId;
     if (!ringCameraId) {
       this.logger.warn(`Camera ${camera.name} has no nativeId, skipping initialization`);
@@ -157,7 +150,6 @@ export default class RingPlugin extends BasePlugin<StorageValues> implements Dis
 
     const ringCamera = this.discoveredRingCameras.get(ringCameraId);
     if (ringCamera) {
-      // Ring camera is available, initialize it
       await this.initializeCamera(ringCamera, camera);
     } else {
       this.logger.debug(`Ring camera ${ringCameraId} not yet discovered, will initialize when available`);
@@ -173,7 +165,6 @@ export default class RingPlugin extends BasePlugin<StorageValues> implements Dis
         this.ringCameras.delete(cameraDevice.nativeId);
       }
 
-      // Push the camera back as discovered immediately
       const ringCamera = this.discoveredRingCameras.get(cameraDevice.nativeId);
       if (ringCamera) {
         await this.api.deviceManager.pushDiscoveredCameras([
@@ -194,12 +185,10 @@ export default class RingPlugin extends BasePlugin<StorageValues> implements Dis
   }
 
   public async onGetCameraSettings(_camera: DiscoveredCamera): Promise<JsonSchemaWithoutCallbacks[]> {
-    // No additional credentials needed - already logged in via plugin config
     return [];
   }
 
   public async onAdoptCamera(camera: DiscoveredCamera, _credentials: Record<string, unknown>): Promise<CameraConfig> {
-    // Extract ring camera ID from discovery ID (ring:12345 -> 12345)
     const ringCameraId = camera.id.replace('ring:', '');
     const ringCamera = this.discoveredRingCameras.get(ringCameraId);
 
@@ -207,7 +196,6 @@ export default class RingPlugin extends BasePlugin<StorageValues> implements Dis
       throw new Error(`Ring camera ${ringCameraId} not found`);
     }
 
-    // Return camera config - backend will create the camera
     const config: CameraConfig = {
       name: ringCamera.name,
       nativeId: ringCamera.id.toString(),
@@ -299,7 +287,6 @@ export default class RingPlugin extends BasePlugin<StorageValues> implements Dis
           this.refreshConfig(home);
         });
 
-        // Fetch cameras from Ring API
         const ringCameras = await api.getCameras();
         await this.updateDiscoveredCameras(ringCameras);
       } else {
@@ -311,28 +298,23 @@ export default class RingPlugin extends BasePlugin<StorageValues> implements Dis
   }
 
   private async updateDiscoveredCameras(ringCameras: RingCamera[]): Promise<void> {
-    // Store all ring cameras and initialize existing ones
     for (const ringCamera of ringCameras) {
       const ringCameraId = ringCamera.id.toString();
       this.discoveredRingCameras.set(ringCameraId, ringCamera);
 
-      // Try to initialize existing camera
       await this.initializeExistingCamera(ringCamera);
     }
 
-    // Push new cameras to discovery manager
     await this.pushDiscoveredCameras();
   }
 
   private async initializeExistingCamera(ringCamera: RingCamera): Promise<void> {
     const ringCameraId = ringCamera.id.toString();
 
-    // Skip if already initialized
     if (this.ringCameras.has(ringCameraId)) {
       return;
     }
 
-    // Find existing camera device by nativeId
     const cameraDevice = Array.from(this.existingCameras.values()).find((camera) => camera.nativeId === ringCameraId);
 
     if (cameraDevice) {
@@ -343,7 +325,6 @@ export default class RingPlugin extends BasePlugin<StorageValues> implements Dis
   private async initializeCamera(ringCamera: RingCamera, cameraDevice: CameraDevice): Promise<void> {
     const ringCameraId = ringCamera.id.toString();
 
-    // Skip if already initialized
     if (this.ringCameras.has(ringCameraId)) {
       return;
     }
@@ -367,7 +348,6 @@ export default class RingPlugin extends BasePlugin<StorageValues> implements Dis
     const discovered: DiscoveredCamera[] = [];
 
     for (const [ringCameraId, ringCamera] of this.discoveredRingCameras) {
-      // Skip cameras that are already added to camera.ui
       const existingCamera = Array.from(this.existingCameras.values()).find((camera) => camera.nativeId === ringCameraId);
       if (existingCamera) {
         continue;
@@ -473,7 +453,6 @@ export default class RingPlugin extends BasePlugin<StorageValues> implements Dis
           }
         }
 
-        // token was not valid, login again
         try {
           const response = await this.generateCode(home.name, home.email, home.password);
 

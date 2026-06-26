@@ -80,9 +80,7 @@ export class Camera {
   }
 
   private subscribeToConnectionState(): void {
-    // Note: onData fires immediately with initial state
     this.ringCamera.onData.subscribe((data) => {
-      // Connection state - use alerts.connection if available, fallback to isOffline
       const isOffline = data.alerts?.connection === 'offline' || this.ringCamera.isOffline;
 
       if (isOffline && this.cameraDevice.connected) {

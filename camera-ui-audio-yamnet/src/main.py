@@ -98,10 +98,8 @@ class YAMNetPlugin(BasePlugin, AudioDetectionInterface):
 
         await detector.initialize()
 
-        # Decode WAV file to float32 waveform (handles PCM, A-law, mu-law, float)
         waveform, sample_rate = decode_wav(audio_data)
 
-        # Resample to YAMNet's expected sample rate (16kHz) if needed
         if sample_rate != YAMNET_SAMPLE_RATE:
             target_samples = int(len(waveform) * YAMNET_SAMPLE_RATE / sample_rate)
             waveform = np.interp(
@@ -110,12 +108,10 @@ class YAMNetPlugin(BasePlugin, AudioDetectionInterface):
                 waveform,
             ).astype(np.float32)
 
-        # Calculate dBFS
         rms = float(np.sqrt(np.mean(waveform**2)))
         dbfs = 20 * math.log10(max(rms, 1e-10)) if rms > 0 else -100.0
 
-        # YAMNet expects exactly YAMNET_SAMPLES_PER_FRAME (15600) samples per inference.
-        # Split the waveform into chunks and take the max score per label across all chunks.
+        # YAMNet requires exactly YAMNET_SAMPLES_PER_FRAME (15600) samples per inference
         all_scores: dict[str, float] = {}
 
         for start in range(0, len(waveform), YAMNET_SAMPLES_PER_FRAME):
@@ -128,7 +124,6 @@ class YAMNetPlugin(BasePlugin, AudioDetectionInterface):
                 if label not in all_scores or score > all_scores[label]:
                     all_scores[label] = score
 
-        # Filter by configured listen labels
         listen_labels: list[str] = config.get("listen_labels", DEFAULT_LISTEN_LABELS)
         threshold: float = config.get("threshold", DEFAULT_THRESHOLD)
         listen_set = set(listen_labels)
@@ -167,7 +162,6 @@ class YAMNetPlugin(BasePlugin, AudioDetectionInterface):
         threshold: float = cfg.get("threshold", DEFAULT_THRESHOLD)
         listen_set = set(listen_labels)
 
-        # AudioFrameData provides raw samples directly
         fmt = audio.get("format", "float32")
         if fmt == "pcm16":
             waveform: np.ndarray[Any, Any] = (
@@ -176,7 +170,6 @@ class YAMNetPlugin(BasePlugin, AudioDetectionInterface):
         else:
             waveform = np.frombuffer(audio["data"], dtype=np.float32)
 
-        # Calculate dBFS
         rms = float(np.sqrt(np.mean(waveform**2)))
         dbfs = 20 * math.log10(max(rms, 1e-10)) if rms > 0 else -100.0
 

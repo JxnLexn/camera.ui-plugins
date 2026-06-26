@@ -48,7 +48,6 @@ class OpenCLMotionDetector:
         self.width = width
         self.height = height
 
-        # OpenCL Setup
         self.ctx: Any = ctx[0]
         self.device: Any = ctx[1]
         self.program: Any = ctx[2]
@@ -56,7 +55,6 @@ class OpenCLMotionDetector:
 
         mf = cast(Any, cl.mem_flags)
 
-        # Create reusable OpenCL images and buffers
         self.input_image: Any = cl.Image(
             self.ctx,
             mf.READ_ONLY,
@@ -76,10 +74,8 @@ class OpenCLMotionDetector:
             self.ctx, mf.READ_WRITE, size=self.width * self.height * np.dtype(np.float32).itemsize
         )
 
-        # Create host buffer for results
         self.host_result_buffer = np.zeros((self.height, self.width), dtype=np.float32)
 
-        # Create Gaussian kernel and copy it to global GPU memory
         self.kernel = self.__create_gaussian_kernel(blur_radius)
         self.kernel_buf: Any = cl.Buffer(self.ctx, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.kernel)
         self.kernel_size = np.int32(len(self.kernel))
@@ -95,7 +91,6 @@ class OpenCLMotionDetector:
 
         self.first_frame = True
 
-        # Cache kernel to avoid repeated retrieval
         self.process_frame_kernel: Any = cl.Kernel(self.program, "process_frame")
 
         self.camera_logger.debug(
@@ -115,7 +110,6 @@ class OpenCLMotionDetector:
         area_threshold: int,
         alpha: float,
     ) -> list[tuple[float, float, float, float]]:
-        # Copy the frame to OpenCL image
         cl.enqueue_copy(
             self.queue,
             self.input_image,
@@ -124,7 +118,6 @@ class OpenCLMotionDetector:
             region=(self.width, self.height),
         )
 
-        # Process frame using cached kernel
         self.process_frame_kernel.set_args(
             self.input_image,
             self.background_model_buf,
@@ -149,7 +142,6 @@ class OpenCLMotionDetector:
             ),
         )
 
-        # Copy results back to host
         cl.enqueue_copy(
             self.queue,
             self.host_result_buffer,
@@ -188,5 +180,4 @@ class OpenCLMotionDetector:
         return gaussian_kernel
 
     def __del__(self) -> None:
-        # Clean up OpenCL resources
         self.queue.finish()

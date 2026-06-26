@@ -156,7 +156,7 @@ class ONNXPlugin(
 
     def _resolve_provider_lists(self) -> list[ProviderList]:
         pref = self.storage.values.get("execution_provider", DEFAULT_EXECUTION_PROVIDER)
-        system = platform.system()  # "Darwin" / "Linux" / "Windows"
+        system = platform.system()
         machine = platform.machine()
         available: set[str] = set(ort.get_available_providers())
 

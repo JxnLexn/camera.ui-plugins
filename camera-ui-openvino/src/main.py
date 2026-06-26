@@ -143,7 +143,6 @@ class OpenVinoPlugin(
         if mode and mode != "Default":
             return str(mode)
 
-        # "Default": detect hardware and build a smart AUTO string (e.g. AUTO:NPU,GPU,CPU).
         try:
             devices = list(self._core.available_devices)
         except Exception:
@@ -166,8 +165,7 @@ class OpenVinoPlugin(
         if has_npu:
             return "AUTO:NPU,CPU"
         if dgpus:
-            # OpenVINO doesn't split a single model across multiple NVIDIA dGPUs
-            # reliably, so let AUTO pick one rather than forcing MULTI.
+            # OpenVINO can't reliably split one model across multiple NVIDIA dGPUs; let AUTO pick one.
             return f"AUTO:{','.join(dgpus)},CPU"
         if len(gpus) > 1:
             # Multiple (e.g. Intel Arc) GPUs → MULTI round-robins requests across them.

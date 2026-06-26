@@ -93,20 +93,17 @@ export class WASMMotionSensor extends MotionDetectorSensor<WASMMotionStorageValu
   }
 
   async detectMotion(frame: VideoFrameData): Promise<MotionResult> {
-    // Ensure WASM is initialized
     await this.ensureWASMInitialized(frame.width, frame.height);
 
     if (!this.wasmExports) {
       return { detected: false, detections: [] };
     }
 
-    // Get configuration from storage (with defaults)
     const config = this.getConfig();
 
-    // Use any types for WASM functions to bypass TypeScript's incorrect type inference
+    // any: works around the WASM loader's incorrect generated type inference
     const { detectMotion, getNumBoxes, __newArray, __getInt32Array, __pin, __unpin, __collect, Uint8Array_ID } = this.wasmExports as any;
 
-    // Convert frame data to Uint8Array
     const frameData = frame.data instanceof Uint8Array ? frame.data : new Uint8Array(frame.data);
 
     const inputPtr = __pin(__newArray(Uint8Array_ID.value, frameData));
@@ -145,7 +142,6 @@ export class WASMMotionSensor extends MotionDetectorSensor<WASMMotionStorageValu
   }
 
   resetState(): void {
-    // WASM module handles internal state
   }
 
   private getConfig(): WASMMotionStorageValues {
@@ -159,19 +155,17 @@ export class WASMMotionSensor extends MotionDetectorSensor<WASMMotionStorageValu
 
   private async ensureWASMInitialized(width: number, height: number): Promise<void> {
     if (this.wasmExports && this.lastWidth === width && this.lastHeight === height) {
-      return; // Already configured correctly
+      return;
     }
 
     if (!this.wasmExports) {
       const wasmModule = await instantiate(readFileSync(resolve(__dirname, 'detector.wasm')), {
         console: {
           log: () => {
-            // WASM log messages (unused)
           },
         },
         env: {
           abort: () => {
-            // WASM abort handler (unused)
           },
         },
       });
@@ -179,7 +173,6 @@ export class WASMMotionSensor extends MotionDetectorSensor<WASMMotionStorageValu
       this.wasmExports = wasmModule.exports as WASMModule;
     }
 
-    // Initialize/reconfigure for new dimensions
     this.wasmExports.initialize(width, height);
     this.lastWidth = width;
     this.lastHeight = height;

@@ -14,7 +14,6 @@ YAMNET_CHANNELS = 1
 YAMNET_FORMAT: Literal["pcm16", "float32"] = "float32"
 YAMNET_SAMPLES_PER_FRAME = 15600  # 0.975s at 16kHz — YAMNet's fixed input window
 
-# Default labels to listen for (subset of 521 YAMNet classes)
 DEFAULT_LISTEN_LABELS: list[str] = [
     "Bark",
     "Fire alarm",
@@ -36,7 +35,6 @@ DEFAULT_LISTEN_LABELS: list[str] = [
     "Breaking",
 ]
 
-# Default detection threshold (0.0-1.0)
 DEFAULT_THRESHOLD: float = 0.5
 
 LISTEN_SET = set(DEFAULT_LISTEN_LABELS)

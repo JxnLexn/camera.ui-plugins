@@ -52,7 +52,6 @@ export class Camera {
   private home: EufyHome;
   private cameraLogger: LoggerService;
 
-  // Only created when useP2P is enabled
   private relay?: Relay;
   private rtspServer?: RtspServerSink;
   private relayLogger?: Logger;
@@ -100,24 +99,19 @@ export class Camera {
   }
 
   private async initializeSensors(): Promise<void> {
-    // Motion sensor - always available for Eufy cameras
     this.motionSensor = new EufyMotionSensor();
     await this.cameraDevice.addSensor(this.motionSensor);
 
-    // Object sensor - for person/pet/vehicle detection
     this.objectSensor = new EufyObjectSensor();
     await this.cameraDevice.addSensor(this.objectSensor);
 
-    // Battery sensor - only for battery-powered cameras
     if (this.eufyDevice.hasBattery()) {
       this.batterySensor = new EufyBatteryInfo();
       await this.cameraDevice.addSensor(this.batterySensor);
 
-      // Set initial battery state
       this.batterySensor.updateFromEufyCamera(this.eufyDevice);
     }
 
-    // Doorbell trigger - only for doorbell devices
     if (this.eufyDevice.isDoorbell()) {
       this.doorbellTrigger = new EufyDoorbellTrigger();
       await this.cameraDevice.addSensor(this.doorbellTrigger);
@@ -125,35 +119,30 @@ export class Camera {
   }
 
   private subscribeToEvents(): void {
-    // Motion detection events
     this.eufyDevice.on('motion detected', (_device: Device, state: boolean) => {
       if (this.motionSensor) {
         this.motionSensor.reportDetections(state);
       }
     });
 
-    // Person detected events
     this.eufyDevice.on('person detected', (_device: Device, state: boolean) => {
       if (this.objectSensor) {
         this.reportObjectCategory('person', state);
       }
     });
 
-    // Pet detected events
     this.eufyDevice.on('pet detected', (_device: Device, state: boolean) => {
       if (this.objectSensor) {
         this.reportObjectCategory('animal', state);
       }
     });
 
-    // Vehicle detected events
     this.eufyDevice.on('vehicle detected', (_device: Device, state: boolean) => {
       if (this.objectSensor) {
         this.reportObjectCategory('vehicle', state);
       }
     });
 
-    // Doorbell ring events
     if (this.doorbellTrigger) {
       this.eufyDevice.on('rings', (_device: Device, state: boolean) => {
         if (state && this.doorbellTrigger) {
@@ -162,7 +151,6 @@ export class Camera {
       });
     }
 
-    // Battery level changes
     if (this.batterySensor) {
       const batteryProps = [PropertyName.DeviceBattery, PropertyName.DeviceBatteryLow, PropertyName.DeviceChargingStatus] as string[];
       this.eufyDevice.on('property changed', (_device: Device, name: string) => {
@@ -193,8 +181,7 @@ export class Camera {
       return;
     }
 
-    // Eufy events don't include bounding boxes — synthesize one full-frame
-    // detection per active category so labels are correctly auto-derived.
+    // Eufy events lack bounding boxes — synthesize a full-frame detection per category.
     const detections: TrackedDetection[] = Array.from(this.activeObjectCategories).map((label) => ({
       label,
       confidence: 1,
@@ -217,9 +204,7 @@ export class Camera {
   private async createP2PRTSPServer(): Promise<void> {
     this.relayLogger = this.createRelayLogger();
 
-    // One upstream P2P session, fanned out to every rtsp:// puller. The relay is
-    // lazy: it acquires the Eufy livestream on the first viewer and releases it
-    // (idleTimeout) once the last one leaves.
+    // Lazy relay: acquires the Eufy livestream on first viewer, releases it after idleTimeout when the last leaves.
     this.relay = new Relay({
       source: new EufyP2PSource(this.localLivestreamManager, this.relayLogger),
       idleTimeout: 5_000,
@@ -228,8 +213,6 @@ export class Camera {
 
     this.relay.on('stop', () => this.resetTalkback());
 
-    // Advertise a talkback channel to viewers; inbound audio is transcoded to the
-    // Eufy station's expected format and written to the talkback stream.
     this.rtspServer = await this.relay.serveRtsp({ path: 'live', backchannel: { ...TALKBACK_ADVERTISE } });
     this.rtspServer.on('backchannel', (rtp) => this.handleTalkbackRtp(rtp));
 
@@ -271,7 +254,6 @@ export class Camera {
       return rtspUrl;
     }
 
-    // Poll for RTSP URL if not immediately available
     let attempts = 0;
     while (attempts < 20) {
       attempts++;
@@ -290,17 +272,14 @@ export class Camera {
   private async onUseP2PChanged(useP2P: boolean): Promise<void> {
     this.cameraLogger.log(`P2P enabled: ${useP2P}`);
 
-    // Stop any active livestream
     this.localLivestreamManager.stopLocalLiveStream();
 
     if (useP2P) {
-      // Create P2P RTSP relay
       await this.createP2PRTSPServer();
     } else {
-      // Tear down P2P relay if it exists
       if (this.relay) {
-        await this.rtspServer?.shutdown(); // stop the listener + detach from the relay
-        await this.relay.stop(); // close the upstream P2P session
+        await this.rtspServer?.shutdown();
+        await this.relay.stop();
         this.resetTalkback();
         this.rtspServer = undefined;
         this.relay = undefined;

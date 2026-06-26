@@ -64,7 +64,6 @@ OCR_INPUT_HEIGHT = 64
 
 CLIP_EMBEDDING_DIM = 512
 
-# ONNX Runtime execution provider selection (plugin-level setting).
 # "auto" -> CoreML on macOS, CUDA on Linux/Windows x86_64, CPU otherwise.
 EXECUTION_PROVIDERS = ["auto", "cpu", "cuda", "coreml"]
 DEFAULT_EXECUTION_PROVIDER = "auto"

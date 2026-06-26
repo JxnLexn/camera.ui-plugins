@@ -50,7 +50,6 @@ class OpenCV(BasePlugin, MotionDetectionInterface):
         self.api.on(API_EVENT.SHUTDOWN, self.on_shutdown)
 
     async def on_shutdown(self) -> None:
-        # Reset all sensor states
         for sensor in self.sensors.values():
             sensor.resetState()
 
@@ -208,38 +207,30 @@ class OpenCV(BasePlugin, MotionDetectionInterface):
 
         self.motion_detection_running = True
 
-        # Create a temporary file in memory using BytesIO
         input_buffer = io.BytesIO(video_data)
 
-        # Generate a unique temporary filename in the system's temp directory
         temp_input = os.path.join(tempfile.gettempdir(), f"input_{uuid.uuid4()}.mp4")
         temp_output = os.path.join(tempfile.gettempdir(), f"output_{uuid.uuid4()}.mp4")
 
         try:
-            # Write to temp file efficiently using a single write operation
             with open(temp_input, "wb") as f:
                 f.write(input_buffer.getvalue())
 
-            # Release memory of input buffer
             input_buffer.close()
             del input_buffer
 
-            # Open video capture from temporary file
             cap = cv2.VideoCapture(temp_input)
 
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             fps = int(cap.get(cv2.CAP_PROP_FPS))
 
-            # Use H.264 codec for better compression and quality
             fourcc = cv2.VideoWriter.fourcc("a", "v", "c", "1")
             out = cv2.VideoWriter(temp_output, fourcc, fps, (width, height), True)
 
-            # Pre-allocate numpy arrays for better performance
             previous_frame: np.ndarray[Any, Any] | None = None
             backSub = None
 
-            # Use a smaller thread pool since we're mostly I/O bound
             executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="OpenCV")
             detector_model = config.get("motion_detector", "Default")
             self.logger.log(f"Using detector model: {detector_model}")
@@ -252,7 +243,6 @@ class OpenCV(BasePlugin, MotionDetectionInterface):
                     if not ret:
                         break
 
-                    # Convert to grayscale efficiently
                     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
                     if detector_model == "Frame Difference":
@@ -302,12 +292,11 @@ class OpenCV(BasePlugin, MotionDetectionInterface):
                             area,
                         )
 
-                    else:  # default
+                    else:
                         blur = config.get("default_blur", DEFAULT_BLUR)
                         threshold = config.get("default_threshold", DEFAULT_THRESHOLD)
                         area = config.get("default_area", DEFAULT_AREA)
 
-                        # Use stackBlur for better performance
                         gray = cv2.stackBlur(gray, (blur, blur))
 
                         if previous_frame is None:
@@ -325,7 +314,6 @@ class OpenCV(BasePlugin, MotionDetectionInterface):
 
                         previous_frame = gray
 
-                    # Draw rectangles directly on frame
                     for x1, y1, x2, y2 in dets:
                         pt1: cv2.typing.Point = (int(x1), int(y1))
                         pt2: cv2.typing.Point = (int(x2), int(y2))
@@ -333,7 +321,6 @@ class OpenCV(BasePlugin, MotionDetectionInterface):
 
                     out.write(frame)
 
-                    # Explicitly delete frame to help garbage collection
                     del frame
 
             finally:
@@ -341,7 +328,6 @@ class OpenCV(BasePlugin, MotionDetectionInterface):
                 out.release()
                 executor.shutdown()
 
-            # Read output file efficiently in chunks
             with open(temp_output, "rb") as f:
                 result_bytes = f.read()
 
@@ -356,7 +342,6 @@ class OpenCV(BasePlugin, MotionDetectionInterface):
         finally:
             self.motion_detection_running = False
 
-            # Clean up temporary files
             for temp_file in (temp_input, temp_output):
                 try:
                     if os.path.exists(temp_file):
