@@ -25,22 +25,13 @@ import type { Camera as EufyCamera, EufySecurityConfig, Logger, LoginOptions } f
 import type { DeviceContainer, EufyConnectionResponse, EufyHome, StorageValues } from './types.js';
 
 export default class Eufy extends BasePlugin<StorageValues> implements DiscoveryProvider {
-  /** Cameras already added to camera.ui (cameraDeviceId -> CameraDevice) */
   private existingCameras = new Map<string, CameraDevice>();
-
-  /** Eufy camera controllers (eufyCameraId -> Camera) */
   private eufyCameras = new Map<string, Camera>();
-
-  /** Eufy devices discovered from Eufy API (eufyCameraId -> EufyCamera) */
   private discoveredEufyDevices = new Map<string, EufyCamera>();
-
-  /** Eufy client connections */
   private eufyClients = new Map<string, EufySecurity>();
-
-  /** Tracks cameras being initialized (race condition guard) */
+  private eufyClientCreds = new Map<string, string>();
   private pendingCameras = new Set<string>();
 
-  /** Bridges FFmpeg/node-av logs (in this plugin's own process) into our logger. */
   private nativeLogging?: NativeLoggingHandle;
 
   constructor(logger: LoggerService, api: PluginAPI, storage: DeviceStorage<StorageValues>) {
@@ -147,14 +138,12 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
   public async configureCameras(cameras: CameraDevice[]): Promise<void> {
     for (const camera of cameras) {
       this.existingCameras.set(camera.id, camera);
-      // Note: onCameraAdded will be called when Eufy API connects and device is available
     }
   }
 
   public async onCameraAdded(camera: CameraDevice): Promise<void> {
     this.existingCameras.set(camera.id, camera);
 
-    // Find the corresponding Eufy device by nativeId
     const eufyCameraId = camera.nativeId;
     if (!eufyCameraId) {
       this.logger.warn(`Camera ${camera.name} has no nativeId, skipping initialization`);
@@ -163,7 +152,6 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
 
     const eufyDevice = this.discoveredEufyDevices.get(eufyCameraId);
     if (eufyDevice) {
-      // Eufy device is available, initialize it
       await this.initializeCamera(eufyDevice, camera);
     } else {
       this.logger.debug(`Eufy device ${eufyCameraId} not yet discovered, will initialize when available`);
@@ -183,7 +171,6 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
         this.eufyCameras.delete(cameraDevice.nativeId);
       }
 
-      // Push the camera back as discovered immediately
       const eufyDevice = this.discoveredEufyDevices.get(cameraDevice.nativeId);
       if (eufyDevice) {
         await this.api.deviceManager.pushDiscoveredCameras([
@@ -204,12 +191,10 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
   }
 
   public async onGetCameraSettings(_camera: DiscoveredCamera): Promise<JsonSchemaWithoutCallbacks[]> {
-    // No additional credentials needed - already logged in via plugin config
     return [];
   }
 
   public async onAdoptCamera(camera: DiscoveredCamera, _credentials: Record<string, unknown>): Promise<CameraConfig> {
-    // Extract eufy camera ID from discovery ID (eufy:SERIAL -> SERIAL)
     const eufyCameraId = camera.id.replace('eufy:', '');
     const eufyDevice = this.discoveredEufyDevices.get(eufyCameraId);
 
@@ -217,7 +202,6 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
       throw new Error(`Eufy camera ${eufyCameraId} not found`);
     }
 
-    // Return camera config - backend will create the camera
     const config: CameraConfig = {
       name: eufyDevice.getName(),
       nativeId: eufyDevice.getSerial(),
@@ -277,6 +261,7 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
     });
 
     this.eufyClients.clear();
+    this.eufyClientCreds.clear();
     this.discoveredEufyDevices.clear();
     this.eufyCameras.clear();
 
@@ -296,6 +281,7 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
         // ignore
       } finally {
         this.eufyClients.delete(home.name);
+        this.eufyClientCreds.delete(home.name);
       }
     }
   }
@@ -440,32 +426,27 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
     const eufyDevice = deviceContainer.eufyDevice as EufyCamera;
     const eufyCameraId = eufyDevice.getSerial();
 
-    // Skip if already discovered OR currently being processed (race condition guard)
     if (this.discoveredEufyDevices.has(eufyCameraId) || this.pendingCameras.has(eufyCameraId)) {
       this.logger.debug(home.name, `Camera ${eufyDevice.getName()} already discovered or pending, skipping...`);
       return;
     }
 
-    // Mark as pending BEFORE any async operation
+    // Mark as pending BEFORE any async operation to guard against the concurrent-discovery race.
     this.pendingCameras.add(eufyCameraId);
 
     try {
-      // Store discovered device
       this.discoveredEufyDevices.set(eufyCameraId, eufyDevice);
 
-      // Try to initialize if camera already exists in camera.ui
       const cameraDevice = Array.from(this.existingCameras.values()).find((camera) => camera.nativeId === eufyCameraId);
 
       if (cameraDevice) {
         await this.initializeCamera(eufyDevice, cameraDevice, home, eufyClient);
       }
 
-      // Push to discovery manager for new cameras
       await this.pushDiscoveredCameras();
     } catch (error: any) {
       this.logger.error(home.name, 'Error in processDiscoveredDevice', error);
     } finally {
-      // Always remove from pending, even on error
       this.pendingCameras.delete(eufyCameraId);
     }
   }
@@ -473,14 +454,11 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
   private async initializeCamera(eufyDevice: EufyCamera, cameraDevice: CameraDevice, home?: EufyHome, eufyClient?: EufySecurity): Promise<void> {
     const eufyCameraId = eufyDevice.getSerial();
 
-    // Skip if already initialized
     if (this.eufyCameras.has(eufyCameraId)) {
       return;
     }
 
-    // We need home and eufyClient for full initialization
     if (!home || !eufyClient) {
-      // Try to get from storage
       home = this.storage.values;
       eufyClient = this.eufyClients.get(home.name);
     }
@@ -501,12 +479,10 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
     const serial = device.getSerial();
     this.logger.debug(home.name, `A device has been removed: ${device.getName()}`);
 
-    // Clean up internal state
     this.discoveredEufyDevices.delete(serial);
     this.eufyCameras.delete(serial);
 
-    // Note: We no longer call deviceManager.removeCamera()
-    // The camera should be removed via the UI if needed
+    // Camera removal is intentionally left to the UI; we don't call deviceManager.removeCamera() here.
   }
 
   private async pushDiscoveredCameras(): Promise<void> {
@@ -518,14 +494,10 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
     }
   }
 
-  /**
-   * Get discovered cameras (not yet added to camera.ui)
-   */
   private getDiscoveredCameras(): DiscoveredCamera[] {
     const discovered: DiscoveredCamera[] = [];
 
     for (const [eufyCameraId, eufyDevice] of this.discoveredEufyDevices) {
-      // Skip cameras that are already added to camera.ui
       const existingCamera = Array.from(this.existingCameras.values()).find((camera) => camera.nativeId === eufyCameraId);
       if (existingCamera) {
         continue;
@@ -544,117 +516,122 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
 
   private tryLogin(home: EufyHome & { twoFactorCode?: string } & { captchaCode?: string; captchaId: string }): Promise<EufyConnectionResponse> {
     return new Promise(async (resolve, reject) => {
+      let eufyClient: EufySecurity;
       try {
-        let connected = false;
+        eufyClient = await this.getClient(home);
+      } catch (error) {
+        return reject(error);
+      }
 
-        // Close existing client to ensure fresh login with new credentials
-        this.closeClient(home);
+      if (eufyClient.isConnected()) {
+        this.logger.debug(home.name, 'Already connected');
+        return resolve({ connected: true });
+      }
 
-        const eufyClient = await this.getClient(home);
+      let settled = false;
+      const finish = (fn: () => void): void => {
+        if (settled) return;
+        settled = true;
+        eufyClient.removeListener('connect', onConnect);
+        eufyClient.removeListener('tfa request', onTfa);
+        eufyClient.removeListener('captcha request', onCaptcha);
+        eufyClient.removeListener('connection error', onError);
+        fn();
+      };
 
-        eufyClient.once('connect', () => {
-          this.logger.debug(home.name, 'Connected!');
+      const onConnect = (): void => finish(() => resolve({ connected: true }));
+      const onTfa = (): void => finish(() => resolve({ connected: false, is2FA: true }));
+      const onCaptcha = (id: string, captcha: string): void => finish(() => resolve({ connected: false, isCaptcha: { id, captcha } }));
+      const onError = (error: Error): void => finish(() => reject(error));
 
-          connected = true;
-          resolve({ connected: true });
-        });
+      eufyClient.once('connect', onConnect);
+      eufyClient.once('tfa request', onTfa);
+      eufyClient.once('captcha request', onCaptcha);
+      eufyClient.once('connection error', onError);
 
-        eufyClient.once('close', () => {
-          this.logger.debug(home.name, 'Closed!');
+      const hasCaptcha = Boolean(home.captchaCode && home.captchaId);
+      const hasVerifyCode = Boolean(home.twoFactorCode);
 
-          if (!connected) {
-            return reject(new Error('Connection failed'));
-          }
+      const loginOptions: LoginOptions | undefined =
+        hasCaptcha || hasVerifyCode
+          ? {
+              force: true,
+              verifyCode: home.twoFactorCode,
+              captcha: hasCaptcha ? { captchaId: home.captchaId, captchaCode: home.captchaCode! } : undefined,
+            }
+          : undefined;
 
-          resolve({ connected: true });
-        });
+      this.logger.debug(home.name, `Login step: ${hasCaptcha ? 'captcha' : hasVerifyCode ? '2FA code' : 'initial'}`);
 
-        eufyClient.once('connection error', async (error: Error) => {
-          this.logger.debug(home.name, 'Connection Error:', error);
-
-          reject(error);
-        });
-
-        eufyClient.once('captcha request', async (id: string, captcha: string) => {
-          this.logger.debug(home.name, 'CAPTCHA Required!', id, captcha);
-
-          resolve({ connected: false, isCaptcha: { id, captcha } });
-        });
-
-        eufyClient.once('tfa request', async () => {
-          this.logger.debug(home.name, 'Two-Factor Authentication (2FA) Requested!');
-
-          resolve({ connected: false, is2FA: true });
-        });
-
-        const loginOptions: LoginOptions | undefined =
-          (home.captchaCode && home.captchaId) || home.twoFactorCode
-            ? {
-                force: true,
-                verifyCode: home.twoFactorCode,
-                captcha: home.captchaCode && home.captchaId ? { captchaId: home.captchaId, captchaCode: home.captchaCode } : undefined,
-              }
-            : undefined;
-
-        if (loginOptions) {
-          this.logger.debug(home.name, 'Trying to connect with options:', loginOptions);
-        }
-
+      try {
         await eufyClient.connect(loginOptions);
       } catch (error: any) {
-        reject(error);
+        finish(() => reject(error));
       }
     });
   }
 
+  private credentialsKey(home: EufyHome): string {
+    return [home.username, home.password, getCountryCode(home.country), home.deviceName ?? ''].join(' ');
+  }
+
   private async getClient(home: EufyHome): Promise<EufySecurity> {
-    let eufyClient = this.eufyClients.get(home.name);
+    const existing = this.eufyClients.get(home.name);
+    const credentialsChanged = this.eufyClientCreds.get(home.name) !== this.credentialsKey(home);
 
-    if (!eufyClient) {
-      const logger: Logger = {
-        info: (message: any, ...args: any[]) => {
-          this.logger.log(home.name, message, ...args);
-        },
-        warn: (message: any, ...args: any[]) => {
-          this.logger.warn(home.name, message, ...args);
-        },
-        error: (message: any, ...args: any[]) => {
-          this.logger.error(home.name, message, ...args);
-        },
-        fatal: (message: any, ...args: any[]) => {
-          this.logger.error(home.name, message, ...args);
-        },
-        debug: (message: any, ...args: any[]) => {
-          if (home.debug) {
-            this.logger.debug(home.name, message, ...args);
-          }
-        },
-        trace: (message: any, ...args: any[]) => {
-          if (home.debug) {
-            this.logger.debug(home.name, message, ...args);
-          }
-        },
-      };
-
-      const homeKey = home.name?.replace(/[^\w.-]/g, '_') || 'default';
-      const persistentDir = resolve(this.api.storagePath, homeKey);
-      mkdirSync(persistentDir, { recursive: true });
-
-      const eufyConfig: EufySecurityConfig = {
-        username: home.username,
-        password: home.password,
-        country: getCountryCode(home.country),
-        trustedDeviceName: home.deviceName,
-        language: 'en',
-        persistentDir,
-        p2pConnectionSetup: P2PConnectionType.QUICKEST,
-        pollingIntervalMinutes: 10,
-        eventDurationSeconds: 10,
-      };
-
-      eufyClient = await EufySecurity.initialize(eufyConfig, logger);
-      this.eufyClients.set(home.name, eufyClient);
+    // Reuse the same client across the captcha -> 2FA -> success flow; only rebuild when credentials change.
+    if (existing && !credentialsChanged) {
+      return existing;
     }
+
+    if (existing) {
+      this.closeClient(home);
+    }
+
+    const logger: Logger = {
+      info: (message: any, ...args: any[]) => {
+        this.logger.log(home.name, message, ...args);
+      },
+      warn: (message: any, ...args: any[]) => {
+        this.logger.warn(home.name, message, ...args);
+      },
+      error: (message: any, ...args: any[]) => {
+        this.logger.error(home.name, message, ...args);
+      },
+      fatal: (message: any, ...args: any[]) => {
+        this.logger.error(home.name, message, ...args);
+      },
+      debug: (message: any, ...args: any[]) => {
+        if (home.debug) {
+          this.logger.debug(home.name, message, ...args);
+        }
+      },
+      trace: (message: any, ...args: any[]) => {
+        if (home.debug) {
+          this.logger.debug(home.name, message, ...args);
+        }
+      },
+    };
+
+    const homeKey = home.name?.replace(/[^\w.-]/g, '_') || 'default';
+    const persistentDir = resolve(this.api.storagePath, homeKey);
+    mkdirSync(persistentDir, { recursive: true });
+
+    const eufyConfig: EufySecurityConfig = {
+      username: home.username,
+      password: home.password,
+      country: getCountryCode(home.country),
+      trustedDeviceName: home.deviceName,
+      language: 'en',
+      persistentDir,
+      p2pConnectionSetup: P2PConnectionType.QUICKEST,
+      pollingIntervalMinutes: 10,
+      eventDurationSeconds: 10,
+    };
+
+    const eufyClient = await EufySecurity.initialize(eufyConfig, logger);
+    this.eufyClients.set(home.name, eufyClient);
+    this.eufyClientCreds.set(home.name, this.credentialsKey(home));
 
     return eufyClient;
   }
@@ -690,12 +667,9 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
         try {
           const connectionResponse = await this.tryLogin(home);
 
-          const eufyClient = this.eufyClients.get(home.name);
-          eufyClient?.removeAllListeners();
-
           if (connectionResponse.connected) {
-            this.refreshConfig(home);
-            this.connectHome(home);
+            await this.refreshConfig(home);
+            await this.connectHome(home);
           }
 
           const formResponse = this.createFormResponse(connectionResponse);
