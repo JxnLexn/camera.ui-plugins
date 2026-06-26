@@ -8,7 +8,7 @@ import { RtpSplitter } from '../utils/rtp-splitter.js';
 import { generateSrtpOptions, generateSsrc, getSessionConfig } from '../utils/srtp.js';
 import { getDurationSeconds, PromiseTimeout } from '../utils/utils.js';
 
-import type { CameraDevice, LoggerService, RtpSession } from '@camera.ui/sdk';
+import type { CameraDevice, CameraDeviceSource, LoggerService, RtpSession } from '@camera.ui/sdk';
 import type { RtpPacket } from 'werift';
 import type { PrepareStreamRequest, StartStreamRequest } from '../hap.js';
 import type { CameraAccessory } from './accessory.js';
@@ -29,7 +29,7 @@ export class StreamingSession {
 
   private cameraAccessory: CameraAccessory;
   private cameraDevice: CameraDevice;
-  private streamingSession: RtpSession;
+  private streamingSession?: RtpSession;
   private prepareStreamRequest: PrepareStreamRequest;
   private cameraLogger: LoggerService;
 
@@ -45,12 +45,6 @@ export class StreamingSession {
 
     this.videoSrtcpSession = new SrtcpSession(getSessionConfig(this.videoSrtp));
     this.homekitSrtcpSession = new SrtcpSession(getSessionConfig(prepareStreamRequest.video));
-
-    this.streamingSession = this.cameraDevice.streamSource.createRtpSession({
-      audio: true,
-      video: true,
-      backchannel: true,
-    });
   }
 
   public async prepare(): Promise<void> {
@@ -92,89 +86,122 @@ export class StreamingSession {
       this.packetReceivedSubject.next();
       return null;
     });
+  }
 
-    // Inactivity detection: if no packets for 5s (after initial 15s grace period), stop stream
-    {
-      let debounceTimer: NodeJS.Timeout | undefined;
-      const resetDebounce = () => {
+  private setupInactivityDetection(session: RtpSession): void {
+    // Stop the stream if no packets arrive for 5s, after an initial 15s grace period.
+    let debounceTimer: NodeJS.Timeout | undefined;
+    const resetDebounce = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        this.cameraLogger.log(`Live stream appears to be inactive. (${getDurationSeconds(this.start)}s)`);
+        await session.stop();
+      }, 5000);
+    };
+    const initialTimer = setTimeout(resetDebounce, 15000);
+    const packetSub = this.packetReceivedSubject.subscribe(resetDebounce);
+    session.addSubscriptions(
+      new Disposable(() => {
+        clearTimeout(initialTimer);
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(async () => {
-          this.cameraLogger.log(`Live stream appears to be inactive. (${getDurationSeconds(this.start)}s)`);
-          await this.streamingSession.stop();
-        }, 5000);
-      };
-      const initialTimer = setTimeout(resetDebounce, 15000);
-      const packetSub = this.packetReceivedSubject.subscribe(resetDebounce);
-      this.streamingSession.addSubscriptions(
-        new Disposable(() => {
-          clearTimeout(initialTimer);
-          clearTimeout(debounceTimer);
-          packetSub.dispose();
-        }),
-      );
-    }
+        packetSub.dispose();
+      }),
+    );
+  }
 
-    // Send RTCP sender reports every 500ms
-    {
-      const rtcpInterval = setInterval(async () => {
-        const senderInfo = new RtcpSenderInfo({
-          ntpTimestamp: BigInt(0),
-          packetCount: 0,
-          octetCount: 0,
-          rtpTimestamp: 0,
+  private setupRtcpSenderReports(session: RtpSession): void {
+    const rtcpInterval = setInterval(async () => {
+      const senderInfo = new RtcpSenderInfo({
+        ntpTimestamp: BigInt(0),
+        packetCount: 0,
+        octetCount: 0,
+        rtpTimestamp: 0,
+      });
+
+      const senderReport = new RtcpSrPacket({
+        ssrc: this.videoSsrc,
+        senderInfo: senderInfo,
+      });
+
+      const encryptedPacket = this.videoSrtcpSession.encrypt(senderReport.serialize());
+
+      try {
+        await this.videoSplitter.send(encryptedPacket, {
+          port: this.prepareStreamRequest.video.port,
+          address: this.prepareStreamRequest.targetAddress,
         });
-
-        const senderReport = new RtcpSrPacket({
-          ssrc: this.videoSsrc,
-          senderInfo: senderInfo,
-        });
-
-        const encryptedPacket = this.videoSrtcpSession.encrypt(senderReport.serialize());
-
-        try {
-          await this.videoSplitter.send(encryptedPacket, {
-            port: this.prepareStreamRequest.video.port,
-            address: this.prepareStreamRequest.targetAddress,
-          });
-        } catch {
-          //
-        }
-      }, 500);
-      this.streamingSession.addSubscriptions(new Disposable(() => clearInterval(rtcpInterval)));
-    }
+      } catch {
+        //
+      }
+    }, 500);
+    session.addSubscriptions(new Disposable(() => clearInterval(rtcpInterval)));
   }
 
   public async activate(startStreamRequest: StartStreamRequest): Promise<void> {
     this.cameraLogger.debug('Starting stream:', startStreamRequest);
 
-    const waitForRtcp = false;
-
-    // if (this.isLowBandwidth(startStreamRequest)) {
-    //   this.cameraLogger.attention('Low bandwidth detected, waiting for initial RTCP');
-    //   waitForRtcp = true;
-    // }
-
-    if (waitForRtcp) {
-      await PromiseTimeout(firstValueFrom(this.packetReceivedSubject), 3000, undefined, 'Failed to receive initial RTCP packet');
-      await this.run(startStreamRequest);
-    } else {
-      await this.run(startStreamRequest);
+    const remote = this.isLowBandwidth(startStreamRequest);
+    if (remote) {
+      this.cameraLogger.attention('Low bandwidth detected, waiting for initial RTCP');
     }
+
+    const source = this.selectStreamSource(startStreamRequest, remote);
+    const session = source.createRtpSession({
+      audio: true,
+      video: true,
+      backchannel: true,
+    });
+    this.streamingSession = session;
+
+    this.setupInactivityDetection(session);
+    this.setupRtcpSenderReports(session);
+
+    if (remote) {
+      await PromiseTimeout(firstValueFrom(this.packetReceivedSubject), 3000, undefined, 'Failed to receive initial RTCP packet');
+    }
+
+    await this.run(session, startStreamRequest);
   }
 
   public async stop(): Promise<void> {
     this.cameraLogger.debug('Stopping stream');
-    await this.streamingSession.stop();
+    await this.streamingSession?.stop();
     this.audioSplitter.close();
     this.videoSplitter.close();
     this.cameraLogger.debug('Stream stopped');
   }
 
-  private async run(startStreamRequest: StartStreamRequest): Promise<void> {
-    this.listenForAudioPackets();
-    this.listenForVideoPackets();
+  private selectStreamSource(startStreamRequest: StartStreamRequest, remote: boolean): CameraDeviceSource {
+    const { streamSource, highResolutionSource: high, midResolutionSource: mid, lowResolutionSource: low } = this.cameraDevice;
 
-    await this.streamingSession.startStream({
+    if (!remote || !this.cameraAccessory.cameraStorage.values.adaptiveStreamSource) {
+      return streamSource;
+    }
+
+    const width = startStreamRequest.video.width;
+    let preference: (CameraDeviceSource | undefined)[];
+    if (width >= 1920) {
+      preference = [high, mid, low];
+    } else if (width >= 1280) {
+      preference = [mid, low, high];
+    } else {
+      preference = [low, mid, high];
+    }
+
+    const selected = preference.find((candidate): candidate is CameraDeviceSource => candidate !== undefined) ?? streamSource;
+
+    if (selected !== streamSource) {
+      this.cameraLogger.debug(`Adaptive source: HomeKit requested ${width}px width, using "${selected.name}" (${selected.role})`);
+    }
+
+    return selected;
+  }
+
+  private async run(session: RtpSession, startStreamRequest: StartStreamRequest): Promise<void> {
+    this.listenForAudioPackets(session);
+    this.listenForVideoPackets(session);
+
+    await session.startStream({
       hardware: 'auto',
       video: {
         codec: 'h264',
@@ -195,7 +222,7 @@ export class StreamingSession {
       },
     });
 
-    await this.streamingSession.startBackchannel({
+    await session.startBackchannel({
       decoderCodec: startStreamRequest.audio.codec === AudioStreamingCodecType.OPUS ? 'libopus' : 'libfdk_aac',
       payloadType: startStreamRequest.audio.pt,
       clockRate: startStreamRequest.audio.sample_rate * 1000,
@@ -211,12 +238,12 @@ export class StreamingSession {
       },
     });
 
-    if (this.streamingSession.hasBackchannel) {
-      this.listenForReturnAudioPackets();
+    if (session.hasBackchannel) {
+      this.listenForReturnAudioPackets(session);
     }
   }
 
-  private listenForVideoPackets(): void {
+  private listenForVideoPackets(session: RtpSession): void {
     let sentVideo = false;
 
     const {
@@ -226,8 +253,8 @@ export class StreamingSession {
 
     const videoSrtpSession = new SrtpSession(getSessionConfig(this.videoSrtp));
 
-    this.streamingSession.addSubscriptions(
-      this.streamingSession.onVideoRtp.subscribe(async (rtp: RtpPacket) => {
+    session.addSubscriptions(
+      session.onVideoRtp.subscribe(async (rtp: RtpPacket) => {
         if (!sentVideo) {
           sentVideo = true;
           this.cameraLogger.debug(`Received video data (${getDurationSeconds(this.start)}s)`);
@@ -243,7 +270,7 @@ export class StreamingSession {
     );
   }
 
-  private listenForAudioPackets(): void {
+  private listenForAudioPackets(session: RtpSession): void {
     let sentAudio = false;
 
     const {
@@ -253,8 +280,8 @@ export class StreamingSession {
 
     const audioSrtpSession = new SrtpSession(getSessionConfig(this.audioSrtp));
 
-    this.streamingSession.addSubscriptions(
-      this.streamingSession.onAudioRtp.subscribe(async (rtp: RtpPacket) => {
+    session.addSubscriptions(
+      session.onAudioRtp.subscribe(async (rtp: RtpPacket) => {
         if (!sentAudio) {
           sentAudio = true;
           this.cameraLogger.debug(`Received audio data (${getDurationSeconds(this.start)}s)`);
@@ -270,12 +297,12 @@ export class StreamingSession {
     );
   }
 
-  private listenForReturnAudioPackets(): void {
+  private listenForReturnAudioPackets(session: RtpSession): void {
     this.audioSplitter.addMessageHandler(({ message, isRtpMessage }) => {
       if (isRtpMessage) {
         try {
           // Forward encrypted SRTP packet directly - node-av will decrypt
-          this.streamingSession.sendAudioPacket(message).catch(() => {});
+          session.sendAudioPacket(message).catch(() => {});
         } catch {
           // Ignore deserialization errors
         }
