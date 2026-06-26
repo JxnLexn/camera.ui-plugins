@@ -12,11 +12,9 @@ export class RecordingSession extends EventEmitter {
   private session?: Fmp4Session;
   private configuration?: CameraRecordingConfiguration;
 
-  // Recording state
   private recordingActive = false;
   private activeRecording = false;
 
-  // Stream control
   private abortController?: AbortController;
   private fragmentTimeout = 8000;
 
@@ -49,12 +47,17 @@ export class RecordingSession extends EventEmitter {
     try {
       await this.ensureSessionStarted();
 
+      const session = this.session;
+      if (!session) {
+        throw new Error('FMP4 session unavailable');
+      }
+
       this.logger.debug(this.logPrefix, 'Yielding init segment');
-      const initSegment = await PromiseTimeout(this.session!.initSegment, this.fragmentTimeout, undefined, 'Init segment timeout');
+      const initSegment = await PromiseTimeout(session.initSegment, this.fragmentTimeout, undefined, 'Init segment timeout');
       yield initSegment;
 
       this.logger.debug(this.logPrefix, 'Yielding live fragments');
-      const iterator = this.session!.streamBoxes(this.abortController.signal);
+      const iterator = session.streamBoxes(this.abortController.signal);
 
       while (!this.abortController.signal.aborted) {
         const result = await PromiseTimeout(iterator.next(), this.fragmentTimeout, undefined, 'Fragment timeout');
@@ -99,13 +102,13 @@ export class RecordingSession extends EventEmitter {
       video: true,
       backchannel: false,
       gop: false,
-      prebuffer: true,
+      prebuffer: this.cameraDevice.streamSource.prebuffer,
     });
 
     this.session.onEnded.subscribe(() => {
-      if (!this.activeRecording) {
-        this.emit('session-ended');
-      }
+      this.logger.debug(this.logPrefix, 'FMP4 session ended; discarding');
+      this.session = undefined;
+      this.emit('session-ended');
     });
 
     await this.session.startStream({
