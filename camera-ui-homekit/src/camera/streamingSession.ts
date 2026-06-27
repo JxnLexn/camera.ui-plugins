@@ -1,4 +1,4 @@
-import { Disposable, firstValueFrom, Subject } from '@camera.ui/sdk';
+import { Disposable, Subject } from '@camera.ui/sdk';
 import { isIPv6 } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { isRtcp, RtcpPacketConverter, RtcpRrPacket, RtcpSenderInfo, RtcpSrPacket, SrtcpSession, SrtpSession } from 'werift';
@@ -6,7 +6,7 @@ import { AudioStreamingCodecType, SRTPCryptoSuites } from '../hap.js';
 
 import { RtpSplitter } from '../utils/rtp-splitter.js';
 import { generateSrtpOptions, generateSsrc, getSessionConfig } from '../utils/srtp.js';
-import { getDurationSeconds, PromiseTimeout } from '../utils/utils.js';
+import { getDurationSeconds } from '../utils/utils.js';
 
 import type { CameraDevice, CameraDeviceSource, LoggerService, RtpSession } from '@camera.ui/sdk';
 import type { RtpPacket } from 'werift';
@@ -140,9 +140,10 @@ export class StreamingSession {
   public async activate(startStreamRequest: StartStreamRequest): Promise<void> {
     this.cameraLogger.debug('Starting stream:', startStreamRequest);
 
+    const allowAuto = this.cameraAccessory.cameraStorage.values.adaptiveStreamSource;
     const remote = this.isLowBandwidth(startStreamRequest);
-    if (remote) {
-      this.cameraLogger.attention('Low bandwidth detected, waiting for initial RTCP');
+    if (remote && allowAuto) {
+      this.cameraLogger.attention('Low bandwidth detected, using adaptive stream source if available');
     }
 
     const source = this.selectStreamSource(startStreamRequest, remote);
@@ -156,9 +157,9 @@ export class StreamingSession {
     this.setupInactivityDetection(session);
     this.setupRtcpSenderReports(session);
 
-    if (remote) {
-      await PromiseTimeout(firstValueFrom(this.packetReceivedSubject), 3000, undefined, 'Failed to receive initial RTCP packet');
-    }
+    // if (remote) {
+    //   await PromiseTimeout(firstValueFrom(this.packetReceivedSubject), 3000, undefined, 'Failed to receive initial RTCP packet');
+    // }
 
     await this.run(session, startStreamRequest);
   }

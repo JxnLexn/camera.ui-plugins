@@ -84,6 +84,15 @@ export class RecordingSession extends EventEmitter {
   public stop(): void {
     this.abortController?.abort();
     this.activeRecording = false;
+
+    const session = this.session;
+    if (session) {
+      this.session = undefined;
+      this.logger.debug(this.logPrefix, 'Stopping FMP4 session');
+      session.stop().catch((error) => {
+        this.logger.error(this.logPrefix, 'Error stopping FMP4 session:', error);
+      });
+    }
   }
 
   private async ensureSessionStarted(): Promise<void> {
