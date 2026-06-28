@@ -1,23 +1,41 @@
 import chalk from 'chalk';
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { createInterface } from 'node:readline/promises';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
-// Bump a single plugin's version, commit it, tag it `<plugin>-v<version>` and
-// push. The matching `release.yml` workflow then builds, bundles and publishes
-// that plugin to npm with provenance.
+// Bump a plugin's version, commit it, tag it `<plugin>-v<version>` and push.
+// The matching `release.yml` workflow then builds, bundles and publishes that
+// plugin to npm with provenance.
 //
 //   tsx scripts/release.ts camera-ui-homekit patch
 //   tsx scripts/release.ts camera-ui-eufy 1.2.0
 //   tsx scripts/release.ts camera-ui-coreml 0.1.0-beta.1 --yes
+//
+// Pass ALL instead of a plugin name to release every camera-ui-* plugin in this
+// monorepo in one go (only the bump specs major/minor/patch are allowed there):
+//
+//   tsx scripts/release.ts ALL patch
+//   tsx scripts/release.ts ALL minor --yes --skip-checks
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT = resolve(__dirname, '..');
 
 const SEMVER = /^\d+\.\d+\.\d+(?:-(?:alpha|beta)\.\d+)?$/;
+
+type BumpSpec = 'major' | 'minor' | 'patch';
+
+interface PluginPlan {
+  name: string;
+  dir: string;
+  pkgPath: string;
+  current: string;
+  next: string;
+  tag: string;
+  addPaths: string[];
+}
 
 function fail(message: string): never {
   console.error('\r\n', chalk.bgRed.bold(' ERROR '), chalk.red(message));
@@ -28,16 +46,21 @@ function usage(): never {
   console.log(
     [
       '',
-      chalk.bold('Usage:') + ' tsx scripts/release.ts <plugin> <version|major|minor|patch> [--yes] [--skip-checks]',
+      chalk.bold('Usage:') + ' tsx scripts/release.ts <plugin|ALL> <version|major|minor|patch> [--yes] [--skip-checks]',
       '',
       'Examples:',
       '  tsx scripts/release.ts camera-ui-homekit patch',
       '  tsx scripts/release.ts camera-ui-eufy 1.2.0',
       '  tsx scripts/release.ts camera-ui-coreml 0.1.0-beta.1 --yes',
+      '  tsx scripts/release.ts ALL patch',
+      '  tsx scripts/release.ts ALL minor --yes',
       '',
       'Options:',
       '  --yes, -y       Push without the confirmation prompt.',
       '  --skip-checks   Skip the local lint + build pre-flight (the workflow still runs it).',
+      '',
+      'Notes:',
+      '  ALL releases every camera-ui-* plugin and only accepts major/minor/patch.',
       '',
     ].join('\r\n'),
   );
@@ -54,7 +77,11 @@ function git(cmd: string, opts: { capture?: boolean } = {}): string {
     .trim();
 }
 
-function bump(current: string, spec: 'major' | 'minor' | 'patch'): string {
+function isBumpSpec(spec: string): spec is BumpSpec {
+  return spec === 'major' || spec === 'minor' || spec === 'patch';
+}
+
+function bump(current: string, spec: BumpSpec): string {
   const [major, minor, patch] = current.split('-')[0].split('.').map(Number);
   if ([major, minor, patch].some(Number.isNaN)) fail(`Cannot bump non-numeric version '${current}'.`);
   if (spec === 'major') return `${major + 1}.0.0`;
@@ -72,19 +99,66 @@ async function confirm(question: string): Promise<boolean> {
   }
 }
 
+function discoverPlugins(): string[] {
+  return readdirSync(ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('camera-ui-'))
+    .map((entry) => entry.name)
+    .filter((name) => existsSync(resolve(ROOT, name, 'package.json')))
+    .sort();
+}
+
+function planPlugin(name: string, spec: string): PluginPlan {
+  const dir = resolve(ROOT, name);
+  const pkgPath = resolve(dir, 'package.json');
+  if (!name.startsWith('camera-ui-') || !existsSync(pkgPath)) {
+    fail(`Unknown plugin '${name}' (no ${name}/package.json found).`);
+  }
+
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+  const current: string = pkg.version;
+  const next = isBumpSpec(spec) ? bump(current, spec) : spec;
+  if (!SEMVER.test(next)) fail(`Invalid version '${next}' (expected X.Y.Z or X.Y.Z-alpha.N / -beta.N).`);
+
+  const tag = `${name}-v${next}`;
+  try {
+    git(`rev-parse ${tag}`, { capture: true });
+    fail(`Tag ${tag} already exists.`);
+  } catch {
+    // tag does not exist - good
+  }
+
+  const addPaths = [`${name}/package.json`];
+  if (existsSync(resolve(dir, 'package-lock.json'))) addPaths.push(`${name}/package-lock.json`);
+
+  return { name, dir, pkgPath, current, next, tag, addPaths };
+}
+
+function runChecks(plan: PluginPlan): void {
+  console.log(chalk.yellow(`Running lint + build for ${plan.name}...`));
+  execSync(`npm --prefix "${plan.dir}" run lint`, { cwd: ROOT, stdio: 'inherit' });
+  execSync(`npm --prefix "${plan.dir}" run build`, { cwd: ROOT, stdio: 'inherit' });
+}
+
+function commitAndTag(plan: PluginPlan): void {
+  execSync(`npm --prefix "${plan.dir}" version ${plan.next} --no-git-tag-version`, { cwd: ROOT, stdio: 'inherit' });
+  git(`add ${plan.addPaths.map((p) => `"${p}"`).join(' ')}`);
+  git(`commit -q -m "release(${plan.name}): v${plan.next}"`);
+  git(`tag ${plan.tag}`);
+  console.log(chalk.green(`  ${plan.name}: ${plan.current} -> ${plan.next} (tag ${plan.tag})`));
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const plugin = args[0];
+  const target = args[0];
   const spec = args[1];
   const yes = args.includes('--yes') || args.includes('-y');
   const skipChecks = args.includes('--skip-checks');
 
-  if (!plugin || !spec) usage();
+  if (!target || !spec) usage();
 
-  const pluginDir = resolve(ROOT, plugin);
-  const pkgPath = resolve(pluginDir, 'package.json');
-  if (!plugin.startsWith('camera-ui-') || !existsSync(pkgPath)) {
-    fail(`Unknown plugin '${plugin}' (no ${plugin}/package.json found).`);
+  const all = target === 'ALL';
+  if (all && !isBumpSpec(spec)) {
+    fail(`ALL only accepts major/minor/patch (got '${spec}').`);
   }
 
   // Safety: clean tree, on main, not behind origin.
@@ -102,60 +176,48 @@ async function main(): Promise<void> {
     // offline / no remote tracking - skip the behind check
   }
 
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-  const current: string = pkg.version;
+  // Build the release plan (validates everything before any mutation).
+  const names = all ? discoverPlugins() : [target];
+  if (!names.length) fail('No camera-ui-* plugins found.');
+  const plans = names.map((name) => planPlugin(name, spec));
 
-  const next = spec === 'major' || spec === 'minor' || spec === 'patch' ? bump(current, spec) : spec;
-  if (!SEMVER.test(next)) fail(`Invalid version '${next}' (expected X.Y.Z or X.Y.Z-alpha.N / -beta.N).`);
-
-  const tag = `${plugin}-v${next}`;
-  try {
-    git(`rev-parse ${tag}`, { capture: true });
-    fail(`Tag ${tag} already exists.`);
-  } catch {
-    // tag does not exist - good
+  console.log(chalk.cyan(`\r\nReleasing ${chalk.bold(String(plans.length))} plugin(s):\r\n`));
+  for (const plan of plans) {
+    console.log(`  ${chalk.bold(plan.name)}: ${plan.current} -> ${chalk.bold(plan.next)} (tag ${plan.tag})`);
   }
-
-  console.log(chalk.cyan(`\r\nReleasing ${chalk.bold(plugin)}: ${current} -> ${chalk.bold(next)} (tag ${tag})\r\n`));
-
-  if (!skipChecks) {
-    console.log(chalk.yellow(`Running lint + build for ${plugin}...`));
-    execSync(`npm --prefix "${pluginDir}" run lint`, {
-      cwd: ROOT,
-      stdio: 'inherit',
-    });
-    execSync(`npm --prefix "${pluginDir}" run build`, {
-      cwd: ROOT,
-      stdio: 'inherit',
-    });
-  }
-
-  // Bump the version (no tag yet - we create an annotated tag ourselves below).
-  execSync(`npm --prefix "${pluginDir}" version ${next} --no-git-tag-version`, {
-    cwd: ROOT,
-    stdio: 'inherit',
-  });
-
-  git(`add "${plugin}/package.json" "${plugin}/package-lock.json"`);
-  git(`commit -q -m "release(${plugin}): v${next}"`);
-  console.log(chalk.green('Committed version bump.'));
-
-  git(`tag ${tag}`);
-  console.log(chalk.green(`Created tag ${tag}.`));
+  console.log('');
 
   if (!yes) {
-    const ok = await confirm(`Push main + ${tag} and trigger the release? [y/N] `);
+    const ok = await confirm(`Build, commit, tag and push the above? [y/N] `);
     if (!ok) {
-      git(`tag -d ${tag}`, { capture: true });
-      git('reset -q --hard HEAD~1', { capture: true });
-      console.log(chalk.yellow('Aborted - tag and bump commit were undone locally.'));
+      console.log(chalk.yellow('Aborted - nothing changed.'));
       process.exit(0);
     }
   }
 
+  // Pre-flight checks first so a build failure leaves the tree untouched.
+  if (!skipChecks) {
+    for (const plan of plans) runChecks(plan);
+  }
+
+  // From here we mutate the repo. Roll the whole batch back on any failure.
+  const startHead = git('rev-parse HEAD', { capture: true });
+  const createdTags: string[] = [];
+  try {
+    for (const plan of plans) {
+      commitAndTag(plan);
+      createdTags.push(plan.tag);
+    }
+  } catch (error) {
+    console.error(chalk.red('\r\nFailed mid-release - rolling back local commits and tags...'));
+    for (const tag of createdTags) git(`tag -d ${tag}`, { capture: true });
+    git(`reset -q --hard ${startHead}`, { capture: true });
+    fail(error instanceof Error ? error.message : String(error));
+  }
+
   git('push -q origin main');
-  git(`push -q origin ${tag}`);
-  console.log('\r\n', chalk.bgGreen(' SUCCESS '), chalk.green('Pushed. Watch the release workflow under the repo Actions tab.'));
+  for (const plan of plans) git(`push -q origin ${plan.tag}`);
+  console.log('\r\n', chalk.bgGreen(' SUCCESS '), chalk.green(`Pushed ${plans.length} release(s). Watch the release workflow under the repo Actions tab.`));
 }
 
 main().catch((error) => fail(error instanceof Error ? error.message : String(error)));

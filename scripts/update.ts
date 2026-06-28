@@ -9,7 +9,7 @@ const __dirname = dirname(__filename);
 
 function runCommandsInDirectory(directoryPath: string) {
   try {
-    const cmds = ['npm run update --if-present', 'npm run install-updates --if-present'];
+    const cmds = ['npm run update --if-present'];
     const fullPath = resolve(__dirname, directoryPath);
 
     cmds.forEach((cmd) => {
