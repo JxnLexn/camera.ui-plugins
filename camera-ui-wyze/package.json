@@ -2,7 +2,7 @@
   "displayName": "Wyze",
   "name": "@camera.ui/camera-ui-wyze",
   "version": "0.0.2",
-  "description": "Wyze camera integration with auto-discovery, streaming, and cloud-based motion detection.",
+  "description": "Integrates Wyze cameras into camera.ui, with device discovery, live streaming and motion events.",
   "author": "seydx (https://github.com/cameraui/plugins)",
   "main": "./bundle/dist/main.py",
   "type": "module",
@@ -36,7 +36,8 @@
   "homepage": "https://github.com/cameraui/plugins/tree/main/camera-ui-wyze#readme",
   "keywords": [
     "camera-ui-plugin",
-    "wyze"
+    "wyze",
+    "cameras"
   ],
   "license": "MIT",
   "repository": {

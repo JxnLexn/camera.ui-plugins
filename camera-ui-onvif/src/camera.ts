@@ -293,7 +293,7 @@ export class OnvifCamera {
         type: 'string',
         key: 'username',
         title: 'Username',
-        description: 'The username for ONVIF authentication',
+        description: "Username for the camera's ONVIF account.",
         store: true,
         required: true,
         onSet: async () => {
@@ -305,7 +305,7 @@ export class OnvifCamera {
         format: 'password',
         key: 'password',
         title: 'Password',
-        description: 'The password for ONVIF authentication',
+        description: "Password for the camera's ONVIF account.",
         store: true,
         required: true,
         onSet: async () => {
@@ -316,7 +316,7 @@ export class OnvifCamera {
         type: 'string',
         key: 'url',
         title: 'URL',
-        description: 'The ONVIF device URL (e.g., http://192.168.1.100)',
+        description: 'Device address, e.g. http://192.168.1.100',
         store: true,
         required: true,
         onSet: async () => {
@@ -328,7 +328,7 @@ export class OnvifCamera {
         title: 'Reconnect',
         key: 'reconnect',
         color: 'success',
-        description: 'Reconnect to the ONVIF device',
+        description: 'Reconnect to the camera.',
         onSet: async () => {
           await this.reconnect();
         },

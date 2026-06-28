@@ -2,7 +2,7 @@
   "displayName": "HomeKit",
   "name": "@camera.ui/camera-ui-homekit",
   "version": "0.0.52",
-  "description": "Connect your Apple HomeKit devices for seamless smart home control. Automate and manage your HomeKit ecosystem.",
+  "description": "Exposes camera.ui cameras and sensors to Apple HomeKit, bridging motion, doorbell, battery, contact, light, switch, siren, security system and audio events into the Home app.",
   "author": "seydx (https://github.com/cameraui/plugins)",
   "main": "./bundle/dist/index.js",
   "type": "module",
@@ -54,8 +54,9 @@
   "homepage": "https://github.com/cameraui/plugins/tree/main/camera-ui-homekit#readme",
   "keywords": [
     "camera-ui-plugin",
-    "ring",
-    "webrtc"
+    "homekit",
+    "hub",
+    "bridge"
   ],
   "license": "MIT",
   "repository": {

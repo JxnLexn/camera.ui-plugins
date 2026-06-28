@@ -2,7 +2,7 @@
   "displayName": "Pam Diff",
   "name": "@camera.ui/camera-ui-pamdiff",
   "version": "0.0.26",
-  "description": "Efficient pixel-based motion detection using PAM difference algorithm. Light on resources with quick response time.",
+  "description": "Pixel-based motion detection for camera.ui using the pam-diff algorithm on ffmpeg PAM frames.",
   "author": "seydx (https://github.com/cameraui/plugins)",
   "main": "./bundle/dist/index.js",
   "type": "module",
@@ -50,7 +50,6 @@
   "homepage": "https://github.com/cameraui/plugins/tree/main/camera-ui-pamdiff#readme",
   "keywords": [
     "camera-ui-plugin",
-    "cameras",
     "pamdiff",
     "motion",
     "detection"

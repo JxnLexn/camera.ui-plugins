@@ -2,7 +2,7 @@
   "displayName": "WASM Motion",
   "name": "@camera.ui/camera-ui-wasm-motion",
   "version": "0.0.21",
-  "description": "Browser-based motion detection using WebAssembly. Fast, client-side movement analysis with cross-platform support.",
+  "description": "Motion detection for camera.ui running as a WebAssembly module. Portable, dependency-free pixel motion analysis.",
   "author": "seydx (https://github.com/cameraui/plugins)",
   "main": "./bundle/dist/index.js",
   "type": "module",
@@ -56,7 +56,7 @@
   "homepage": "https://github.com/cameraui/plugins/tree/main/camera-ui-wasm-motion#readme",
   "keywords": [
     "camera-ui-plugin",
-    "smtp",
+    "wasm",
     "motion",
     "detection"
   ],

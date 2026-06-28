@@ -130,7 +130,7 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
         type: 'string',
         key: 'username',
         title: 'Username',
-        description: 'ONVIF username for authentication',
+        description: "Username for the camera's ONVIF account.",
         required: true,
       },
       {
@@ -138,7 +138,7 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
         format: 'password',
         key: 'password',
         title: 'Password',
-        description: 'ONVIF password for authentication',
+        description: "Password for the camera's ONVIF account.",
         required: true,
       },
     ];

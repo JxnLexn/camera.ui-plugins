@@ -2,7 +2,7 @@
   "displayName": "Ring",
   "name": "@camera.ui/camera-ui-ring",
   "version": "0.0.66",
-  "description": "Integrate Ring security cameras seamlessly. Access live feeds, manage recordings, and control Ring device settings.",
+  "description": "Integrates Ring cameras and doorbells into camera.ui, with device discovery, live streaming, and motion, battery, light, siren and doorbell events.",
   "author": "seydx (https://github.com/cameraui/plugins)",
   "main": "./bundle/dist/index.js",
   "type": "module",
@@ -52,7 +52,8 @@
   "keywords": [
     "camera-ui-plugin",
     "ring",
-    "webrtc"
+    "cameras",
+    "doorbell"
   ],
   "license": "MIT",
   "repository": {

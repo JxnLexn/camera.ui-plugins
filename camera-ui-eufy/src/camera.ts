@@ -294,7 +294,7 @@ export class Camera {
         type: 'boolean',
         key: 'useP2P',
         title: 'Use P2P',
-        description: 'Use P2P for live stream instead of RTSP. Enable this if RTSP is not available on your camera.',
+        description: 'Stream over P2P instead of RTSP. Use this if your camera has no RTSP.',
         required: false,
         defaultValue: false,
         store: true,

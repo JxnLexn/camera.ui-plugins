@@ -2,7 +2,7 @@
   "displayName": "YAMNet Audio Detection",
   "name": "@camera.ui/camera-ui-audio-yamnet",
   "version": "0.0.2",
-  "description": "Powerful audio detection using YAMNet. Identify and classify audio events in real-time with high accuracy.",
+  "description": "Audio event detection for camera.ui. Classifies sounds from camera audio streams using the YAMNet model.",
   "author": "seydx (https://github.com/cameraui/plugins)",
   "main": "./bundle/dist/main.py",
   "type": "module",
