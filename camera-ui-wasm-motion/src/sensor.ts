@@ -20,6 +20,8 @@ export interface WASMMotionStorageValues {
 
 export class WASMMotionSensor extends MotionDetectorSensor<WASMMotionStorageValues> {
   private wasmExports?: WASMModule;
+  private frameView?: Uint8Array;
+  private boxesView?: Int32Array;
   private lastWidth = 0;
   private lastHeight = 0;
 
@@ -99,26 +101,26 @@ export class WASMMotionSensor extends MotionDetectorSensor<WASMMotionStorageValu
       return { detected: false, detections: [] };
     }
 
+    if (!this.frameView || !this.boxesView) {
+      return { detected: false, detections: [] };
+    }
+
     const config = this.getConfig();
 
-    // any: works around the WASM loader's incorrect generated type inference
-    const { detectMotion, getNumBoxes, __newArray, __getInt32Array, __pin, __unpin, __collect, Uint8Array_ID } = this.wasmExports as any;
+    const { detectMotion } = this.wasmExports;
 
     const frameData = frame.data instanceof Uint8Array ? frame.data : new Uint8Array(frame.data);
+    this.frameView.set(frameData.subarray(0, this.frameView.length));
 
-    const inputPtr = __pin(__newArray(Uint8Array_ID.value, frameData));
-    const resultPtr = detectMotion(inputPtr, config.threshold, config.blurRadius, config.dilationSize, config.area);
-
-    const numBoxes = getNumBoxes();
-    const boxesArray = __getInt32Array(resultPtr) as Int32Array;
+    const numBoxes = detectMotion(config.threshold, config.blurRadius, config.dilationSize, config.area);
 
     const detections: MotionResult['detections'] = [];
 
     for (let i = 0; i < numBoxes; i++) {
-      const x = boxesArray[i * 4];
-      const y = boxesArray[i * 4 + 1];
-      const w = boxesArray[i * 4 + 2];
-      const h = boxesArray[i * 4 + 3];
+      const x = this.boxesView[i * 4];
+      const y = this.boxesView[i * 4 + 1];
+      const w = this.boxesView[i * 4 + 2];
+      const h = this.boxesView[i * 4 + 3];
 
       detections.push({
         label: 'motion',
@@ -132,9 +134,6 @@ export class WASMMotionSensor extends MotionDetectorSensor<WASMMotionStorageValu
       });
     }
 
-    __unpin(inputPtr);
-    __collect();
-
     return {
       detected: detections.length > 0,
       detections,
@@ -142,6 +141,7 @@ export class WASMMotionSensor extends MotionDetectorSensor<WASMMotionStorageValu
   }
 
   resetState(): void {
+    this.wasmExports?.reset();
   }
 
   private getConfig(): WASMMotionStorageValues {
@@ -174,6 +174,12 @@ export class WASMMotionSensor extends MotionDetectorSensor<WASMMotionStorageValu
     }
 
     this.wasmExports.initialize(width, height);
+
+    const exports = this.wasmExports;
+    const buffer = exports.memory.buffer as ArrayBuffer;
+    this.frameView = new Uint8Array(buffer, exports.getFramePtr(), width * height);
+    this.boxesView = new Int32Array(buffer, exports.getBoxesPtr(), exports.getMaxBoxes() * 4);
+
     this.lastWidth = width;
     this.lastHeight = height;
   }
