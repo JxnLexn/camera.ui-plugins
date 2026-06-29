@@ -161,12 +161,10 @@ export class WASMMotionSensor extends MotionDetectorSensor<WASMMotionStorageValu
     if (!this.wasmExports) {
       const wasmModule = await instantiate(readFileSync(resolve(__dirname, 'detector.wasm')), {
         console: {
-          log: () => {
-          },
+          log: () => {},
         },
         env: {
-          abort: () => {
-          },
+          abort: () => {},
         },
       });
 

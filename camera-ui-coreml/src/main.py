@@ -74,13 +74,9 @@ class CoreMLPlugin(
     LicensePlateDetectionInterface,
     ClipDetectionInterface,
 ):
-    def __init__(
-        self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage[Any]
-    ) -> None:
+    def __init__(self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage[Any]) -> None:
         super().__init__(logger, api, storage)
-        self.model_manager = CoreMlModelManager(
-            api.storagePath, logger, self._resolve_compute_units
-        )
+        self.model_manager = CoreMlModelManager(api.storagePath, logger, self._resolve_compute_units)
 
         self.object_detectors: dict[str, BoxDetector] = {}
         self.face_detectors: dict[str, BoxDetector] = {}
@@ -134,11 +130,7 @@ class CoreMLPlugin(
             )
             if detector.backend is not None
         ]
-        backends += [
-            enc.vision.device
-            for enc in self.clip_encoders.values()
-            if enc.vision is not None
-        ]
+        backends += [enc.vision.device for enc in self.clip_encoders.values() if enc.vision is not None]
         if not backends:
             return "No models loaded yet"
         return ", ".join(dict.fromkeys(backends))
@@ -149,9 +141,7 @@ class CoreMLPlugin(
     async def _on_compute_change(self, new_value: object, old_value: object) -> None:
         if new_value == old_value:
             return
-        self.logger.log(
-            f"Compute units changed ({old_value} -> {new_value}); reloading models"
-        )
+        self.logger.log(f"Compute units changed ({old_value} -> {new_value}); reloading models")
         await self._reload_models()
 
     async def _reload_models(self) -> None:
@@ -245,9 +235,7 @@ class CoreMLPlugin(
         detector = self.object_detectors.get(model_name)
         if not detector:
             # CoreML IR embeds class names → multiclass reads them from metadata.
-            detector = BoxDetector(
-                self.model_manager, self.logger, name="object detector", multiclass=True
-            )
+            detector = BoxDetector(self.model_manager, self.logger, name="object detector", multiclass=True)
             self.object_detectors[model_name] = detector
             await detector.initialize(model_name)
         return detector
@@ -255,9 +243,7 @@ class CoreMLPlugin(
     async def get_face_detector(self, model_name: str) -> BoxDetector:
         detector = self.face_detectors.get(model_name)
         if not detector:
-            detector = BoxDetector(
-                self.model_manager, self.logger, name="face detector"
-            )
+            detector = BoxDetector(self.model_manager, self.logger, name="face detector")
             self.face_detectors[model_name] = detector
             await detector.initialize(model_name)
         return detector
@@ -265,9 +251,7 @@ class CoreMLPlugin(
     async def get_face_embedder(self, model_name: str) -> Embedder:
         embedder = self.face_embedders.get(model_name)
         if not embedder:
-            embedder = Embedder(
-                self.model_manager, self.logger, size=FACE_EMBEDDER_INPUT_SIZE
-            )
+            embedder = Embedder(self.model_manager, self.logger, size=FACE_EMBEDDER_INPUT_SIZE)
             self.face_embedders[model_name] = embedder
             await embedder.initialize(model_name)
         return embedder
@@ -598,9 +582,7 @@ class CoreMLPlugin(
         if not encoder.initialized:
             return None
 
-        embedding = await encoder.embed_frame(
-            frame["width"], frame["height"], bytes(frame["data"])
-        )
+        embedding = await encoder.embed_frame(frame["width"], frame["height"], bytes(frame["data"]))
         if not embedding:
             return None
 
