@@ -76,10 +76,14 @@ class OpenVinoPlugin(
     LicensePlateDetectionInterface,
     ClipDetectionInterface,
 ):
-    def __init__(self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage[Any]) -> None:
+    def __init__(
+        self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage[Any]
+    ) -> None:
         super().__init__(logger, api, storage)
         self._core = ov.Core()
-        self.model_manager = OpenVinoModelManager(api.storagePath, logger, self._resolve_device)
+        self.model_manager = OpenVinoModelManager(
+            api.storagePath, logger, self._resolve_device
+        )
 
         self.object_detectors: dict[str, BoxDetector] = {}
         self.face_detectors: dict[str, BoxDetector] = {}
@@ -114,7 +118,7 @@ class OpenVinoPlugin(
                 "type": "string",
                 "key": "active_hardware",
                 "title": "Active Hardware",
-                "description": "Device currently running inference across loaded models (read-only).",
+                "description": "Device currently running inference across loaded models.",
                 "readonly": True,
                 "store": False,
                 "onGet": self._active_hardware,
@@ -133,7 +137,11 @@ class OpenVinoPlugin(
             )
             if detector.backend is not None
         ]
-        backends += [enc.vision.device for enc in self.clip_encoders.values() if enc.vision is not None]
+        backends += [
+            enc.vision.device
+            for enc in self.clip_encoders.values()
+            if enc.vision is not None
+        ]
         if not backends:
             return "No models loaded yet"
         return ", ".join(dict.fromkeys(backends))
@@ -149,7 +157,9 @@ class OpenVinoPlugin(
             return "AUTO"
 
         has_npu = any("NPU" in d for d in devices)
-        gpus = [d for d in devices if "GPU" in d]  # "GPU", or "GPU.0"/"GPU.1" when multiple
+        gpus = [
+            d for d in devices if "GPU" in d
+        ]  # "GPU", or "GPU.0"/"GPU.1" when multiple
         has_gpu = bool(gpus)
         dgpus: list[str] = []
         for d in gpus:
@@ -177,7 +187,9 @@ class OpenVinoPlugin(
     async def _on_device_change(self, new_value: object, old_value: object) -> None:
         if new_value == old_value:
             return
-        self.logger.log(f"Device setting changed ({old_value} -> {new_value}); reloading models")
+        self.logger.log(
+            f"Device setting changed ({old_value} -> {new_value}); reloading models"
+        )
         await self._reload_models()
 
     async def _reload_models(self) -> None:
@@ -270,17 +282,23 @@ class OpenVinoPlugin(
     async def get_object_detector(self, model_name: str) -> BoxDetector:
         detector = self.object_detectors.get(model_name)
         if not detector:
-            detector = BoxDetector(self.model_manager, self.logger, name="object detector")
+            detector = BoxDetector(
+                self.model_manager, self.logger, name="object detector"
+            )
             self.object_detectors[model_name] = detector
             await detector.initialize(model_name)
             # OpenVINO IR has no embedded class names; inject the trained labels.
-            detector.labels = {index: str(label) for index, label in OBJECT_LABELS.items()}
+            detector.labels = {
+                index: str(label) for index, label in OBJECT_LABELS.items()
+            }
         return detector
 
     async def get_face_detector(self, model_name: str) -> BoxDetector:
         detector = self.face_detectors.get(model_name)
         if not detector:
-            detector = BoxDetector(self.model_manager, self.logger, name="face detector")
+            detector = BoxDetector(
+                self.model_manager, self.logger, name="face detector"
+            )
             self.face_detectors[model_name] = detector
             await detector.initialize(model_name)
         return detector
@@ -288,7 +306,9 @@ class OpenVinoPlugin(
     async def get_face_embedder(self, model_name: str) -> Embedder:
         embedder = self.face_embedders.get(model_name)
         if not embedder:
-            embedder = Embedder(self.model_manager, self.logger, size=FACE_EMBEDDER_INPUT_SIZE)
+            embedder = Embedder(
+                self.model_manager, self.logger, size=FACE_EMBEDDER_INPUT_SIZE
+            )
             self.face_embedders[model_name] = embedder
             await embedder.initialize(model_name)
         return embedder
@@ -297,7 +317,11 @@ class OpenVinoPlugin(
         detector = self.plate_detectors.get(model_name)
         if not detector:
             detector = BoxDetector(
-                self.model_manager, self.logger, name="plate detector", parse="end2end", threshold=0.25
+                self.model_manager,
+                self.logger,
+                name="plate detector",
+                parse="end2end",
+                threshold=0.25,
             )
             self.plate_detectors[model_name] = detector
             await detector.initialize(model_name)
@@ -351,7 +375,11 @@ class OpenVinoPlugin(
 
         raw = await detector.detect_single(image_data, metadata)
         detections: list[Detection] = [
-            {"label": detector.labels.get(cid, "unknown"), "confidence": conf, "box": box}  # type: ignore[typeddict-item]
+            {
+                "label": detector.labels.get(cid, "unknown"),
+                "confidence": conf,
+                "box": box,
+            }  # type: ignore[typeddict-item]
             for cid, conf, box in raw
         ]
         return {"detected": len(detections) > 0, "detections": detections}
@@ -592,7 +620,11 @@ class OpenVinoPlugin(
 
         return {
             "embeddings": [
-                {"label": "image", "box": {"x": 0, "y": 0, "width": 1, "height": 1}, "embedding": embedding}
+                {
+                    "label": "image",
+                    "box": {"x": 0, "y": 0, "width": 1, "height": 1},
+                    "embedding": embedding,
+                }
             ],
             "embeddingModel": encoder.embedding_model,
         }
@@ -605,13 +637,19 @@ class OpenVinoPlugin(
         if not encoder.initialized:
             return None
 
-        embedding = await encoder.embed_frame(frame["width"], frame["height"], bytes(frame["data"]))
+        embedding = await encoder.embed_frame(
+            frame["width"], frame["height"], bytes(frame["data"])
+        )
         if not embedding:
             return None
 
         return {
             "embeddings": [
-                {"label": "image", "box": {"x": 0, "y": 0, "width": 1, "height": 1}, "embedding": embedding}
+                {
+                    "label": "image",
+                    "box": {"x": 0, "y": 0, "width": 1, "height": 1},
+                    "embedding": embedding,
+                }
             ],
             "embeddingModel": encoder.embedding_model,
         }
