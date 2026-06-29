@@ -321,10 +321,10 @@ class CoreMLPlugin(
         raw = await detector.detect_single(image_data, metadata)
         detections: list[Detection] = [
             {
-                "label": detector.labels.get(cid, "unknown"),
+                "label": detector.labels.get(cid, "unknown"),  # type: ignore[typeddict-item]
                 "confidence": conf,
                 "box": box,
-            }  # type: ignore[typeddict-item]
+            }
             for cid, conf, box in raw
         ]
         return {"detected": len(detections) > 0, "detections": detections}
