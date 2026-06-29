@@ -8,12 +8,11 @@
   "type": "module",
   "scripts": {
     "build": "mypy src",
-    "bundle": "npm run format && npm run lint:fix && npm run build && cui bundle",
-    "bundle:dev": "npm run format && npm run lint:fix && npm run build && cross-env MODE=development cui bundle",
+    "bundle": "npm run format && npm run lint && npm run build && cui bundle",
+    "bundle:dev": "npm run format && npm run lint && npm run build && cross-env MODE=development cui bundle",
     "format": "ruff format",
     "install-updates": "npm i --save",
-    "lint": "ruff check",
-    "lint:fix": "ruff check --fix",
+    "lint": "ruff check --fix",
     "prepublishOnly": "node -e \"if(!process.env.SAFE_PUBLISH){console.error('Error: Please use @camera.ui/cli to publish the plugin:\\n  npm run publish:alpha\\n  npm run publish:beta\\n  npm run publish:latest\\n');process.exit(1)}\"",
     "publish:alpha": "npm i --save && npm run bundle && cui publish --alpha",
     "publish:beta": "npm i --save && npm run bundle && cui publish --beta",
@@ -21,8 +20,8 @@
     "update": "updates --update ./ && cupdate"
   },
   "devDependencies": {
-    "@camera.ui/cli": "^0.0.55",
-    "@camera.ui/sdk": "^0.0.9",
+    "@camera.ui/cli": "^0.0.57",
+    "@camera.ui/sdk": "^0.0.11",
     "cross-env": "^10.1.0",
     "updates": "^17.18.1"
   },
