@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 
+import { normalizeFragmentTfdt } from '../utils/fmp4.js';
 import { PromiseTimeout } from '../utils/utils.js';
 
 import type { CameraDevice, Fmp4Session, LoggerService } from '@camera.ui/sdk';
@@ -72,6 +73,7 @@ export class RecordingSession extends EventEmitter {
       throw new Error('FMP4 session unavailable');
     }
 
+    const tfdtOffsets = new Map<number, bigint>();
     const buffered = [...this.prebuffer];
     const queue: Buffer[] = [];
     this.liveQueue = queue;
@@ -88,7 +90,7 @@ export class RecordingSession extends EventEmitter {
           if (signal?.aborted) {
             return;
           }
-          yield fragment;
+          yield normalizeFragmentTfdt(fragment, tfdtOffsets);
         }
       }
 
@@ -112,7 +114,7 @@ export class RecordingSession extends EventEmitter {
           break;
         }
 
-        yield box;
+        yield normalizeFragmentTfdt(box, tfdtOffsets);
       }
     } catch (error) {
       if (signal?.aborted) {
