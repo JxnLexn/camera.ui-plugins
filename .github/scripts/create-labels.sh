@@ -7,6 +7,7 @@ REPO="${1:-cameraui/plugins}"
 labels=(
   # per-plugin (labeler.yml) — applied when a PR touches that plugin's folder
   "audio-yamnet|c5def5|Changes to the YAMNet Audio plugin"
+  "coral|c5def5|Changes to the Coral plugin"
   "coreml|c5def5|Changes to the CoreML plugin"
   "eufy|c5def5|Changes to the Eufy plugin"
   "homekit|c5def5|Changes to the HomeKit plugin"

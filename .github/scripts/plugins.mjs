@@ -12,6 +12,7 @@ export const NODE = {
 
 export const PYTHON = [
   'camera-ui-audio-yamnet',
+  'camera-ui-coral',
   'camera-ui-coreml',
   'camera-ui-ncnn',
   'camera-ui-onnx',

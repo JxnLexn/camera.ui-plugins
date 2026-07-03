@@ -1,6 +1,9 @@
 audio-yamnet:
   - changed-files:
       - any-glob-to-any-file: 'camera-ui-audio-yamnet/**'
+coral:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-coral/**'
 coreml:
   - changed-files:
       - any-glob-to-any-file: 'camera-ui-coreml/**'

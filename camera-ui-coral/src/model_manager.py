@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable, Mapping
+from typing import Any
+
+from camera_ui_ml import BaseModelManager, InferenceBackend
+from camera_ui_sdk import LoggerService
+
+from defaults import MODEL_LFS_URL, model_version
+from inference import CoralBackend
+
+_EDGETPU_LIB = "libedgetpu.so.1"
+
+
+class CoralModelManager(BaseModelManager):
+    def __init__(
+        self,
+        storage_path: str,
+        logger: LoggerService,
+        get_use_edgetpu: Callable[[], bool],
+    ) -> None:
+        super().__init__(storage_path, logger, model_version)
+        self._get_use_edgetpu = get_use_edgetpu
+
+    def model_files(self, model_name: str) -> Mapping[str, tuple[str, str]]:
+        cpu_rel = f"{model_name}/{model_name}.tflite"
+        edgetpu_rel = f"{model_name}/{model_name}_edgetpu.tflite"
+        return {
+            "cpu": (f"{MODEL_LFS_URL}/{cpu_rel}", cpu_rel),
+            "edgetpu": (f"{MODEL_LFS_URL}/{edgetpu_rel}", edgetpu_rel),
+        }
+
+    async def build_backend(self, model_name: str, paths: Mapping[str, str]) -> InferenceBackend:
+        use_edgetpu = self._get_use_edgetpu()
+        interpreter, device = await asyncio.to_thread(
+            self._build, paths["cpu"], paths["edgetpu"], use_edgetpu
+        )
+        self.logger.success(f"Loaded model: {model_name} ({device})")
+        return CoralBackend(interpreter, device)
+
+    @staticmethod
+    def _build(cpu_path: str, edgetpu_path: str, use_edgetpu: bool) -> tuple[Any, str]:
+        from ai_edge_litert.interpreter import Interpreter, load_delegate
+
+        if use_edgetpu:
+            try:
+                delegate = load_delegate(_EDGETPU_LIB)
+                interpreter = Interpreter(model_path=edgetpu_path, experimental_delegates=[delegate])
+                interpreter.allocate_tensors()
+                return interpreter, "Edge TPU (Coral)"
+            except Exception:
+                pass  # no Coral / delegate available -> fall back to CPU
+
+        interpreter = Interpreter(model_path=cpu_path)
+        interpreter.allocate_tensors()
+        return interpreter, "CPU"

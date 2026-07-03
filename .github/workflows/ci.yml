@@ -48,6 +48,7 @@ jobs:
             camera-ui-tuya: ['camera-ui-tuya/**']
             camera-ui-wasm-motion: ['camera-ui-wasm-motion/**']
             camera-ui-audio-yamnet: ['camera-ui-audio-yamnet/**']
+            camera-ui-coral: ['camera-ui-coral/**']
             camera-ui-coreml: ['camera-ui-coreml/**']
             camera-ui-ncnn: ['camera-ui-ncnn/**']
             camera-ui-onnx: ['camera-ui-onnx/**']
