@@ -233,7 +233,7 @@ export class Camera {
   }
 
   private resetTalkback(): void {
-    void this.talkbackTranscoder?.close();
+    this.talkbackTranscoder?.close();
     this.talkbackTranscoder = undefined;
     this.talkbackStarting = undefined;
   }

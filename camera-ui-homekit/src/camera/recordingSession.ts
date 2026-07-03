@@ -150,7 +150,7 @@ export class RecordingSession extends EventEmitter {
       return;
     }
     this.logger.debug(this.logPrefix, 'Starting prebuffer');
-    void this.runPrebuffer();
+    this.runPrebuffer();
   }
 
   private stopPrebuffer(): void {
@@ -225,7 +225,7 @@ export class RecordingSession extends EventEmitter {
       this.restartTimeout = undefined;
       if (this.recordingActive && !this.stopped) {
         this.session = undefined;
-        void this.runPrebuffer();
+        this.runPrebuffer();
       }
     }, this.sessionRestartDelay);
   }
