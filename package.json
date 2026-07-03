@@ -8,6 +8,7 @@
     "audit": "npm audit fix && tsx ./scripts/audit.ts",
     "build": "tsx ./scripts/build.ts",
     "bundle": "cross-env MODE=development tsx ./scripts/bundle.ts",
+    "catalog": "tsx ./scripts/catalog.ts",
     "format": "tsx ./scripts/format.ts",
     "install-updates": "npm i --save && tsx ./scripts/install.ts",
     "lint": "tsx ./scripts/lint.ts",

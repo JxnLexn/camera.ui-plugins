@@ -1,0 +1,4 @@
+{
+  "_readme": "Known-malicious or compromised plugins/versions. Blocked from install and auto-disabled if installed. Keep reasons factual.",
+  "plugins": {}
+}
