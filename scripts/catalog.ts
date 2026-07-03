@@ -15,6 +15,7 @@ interface CatalogEntry {
   category: Category;
   featured: boolean;
   tagline: string;
+  logo?: string;
   screenshots: string[];
 }
 
@@ -39,7 +40,7 @@ const CATEGORY_OVERRIDES: Record<string, Category> = {
   'camera-ui-wyze': 'camera-source',
 };
 
-const FEATURED = new Set<string>(['camera-ui-homekit', 'camera-ui-coral']);
+const FEATURED = new Set<string>(['camera-ui-homekit', 'camera-ui-rust-motion', 'camera-ui-coreml', 'camera-ui-openvino', 'camera-ui-onnx']);
 
 // Official plugins published to npm but sourced from a separate repo, so unavailable
 // when this script runs. Their metadata is maintained here by hand.
@@ -48,6 +49,7 @@ const EXTERNAL_PLUGINS: Record<string, CatalogEntry> = {
     category: 'recording',
     featured: true,
     tagline: 'Manage and store video recordings from your cameras.',
+    logo: `${RAW_BASE}/external-logos/camera-ui-nvr.png`,
     screenshots: [],
   },
 };
@@ -102,6 +104,7 @@ function buildEntry(folder: string): { name: string; entry: CatalogEntry } {
     category: CATEGORY_OVERRIDES[folder] ?? deriveCategory(dir),
     featured: FEATURED.has(folder),
     tagline: firstSentence(pkg.description),
+    ...(existsSync(resolve(dir, 'logo.png')) ? { logo: `${RAW_BASE}/${folder}/logo.png` } : {}),
     screenshots: collectScreenshots(folder, dir),
   };
 

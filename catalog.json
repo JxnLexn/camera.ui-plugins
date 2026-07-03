@@ -3,114 +3,133 @@
     "category": "detection",
     "featured": false,
     "tagline": "Audio event detection for camera.ui.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-audio-yamnet/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-coral": {
     "category": "ai-model",
-    "featured": true,
+    "featured": false,
     "tagline": "Coral Edge TPU (TFLite) detection backend for camera.ui.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-coral/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-coreml": {
     "category": "ai-model",
-    "featured": false,
+    "featured": true,
     "tagline": "Apple CoreML detection backend for camera.ui.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-coreml/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-eufy": {
     "category": "camera-source",
     "featured": false,
     "tagline": "Integrates Eufy security cameras and doorbells into camera.ui, with device discovery, live streaming, and motion, object, battery and doorbell events.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-eufy/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-homekit": {
     "category": "automation",
     "featured": true,
     "tagline": "Exposes camera.ui cameras and sensors to Apple HomeKit, bridging motion, doorbell, battery, contact, light, switch, siren, security system and audio events into the Home app.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-homekit/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-ncnn": {
     "category": "ai-model",
     "featured": false,
     "tagline": "NCNN detection backend for camera.ui.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-ncnn/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-nvr": {
     "category": "recording",
     "featured": true,
     "tagline": "Manage and store video recordings from your cameras.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/external-logos/camera-ui-nvr.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-onnx": {
     "category": "ai-model",
-    "featured": false,
+    "featured": true,
     "tagline": "ONNX Runtime detection backend for camera.ui.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-onnx/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-onvif": {
     "category": "camera-source",
     "featured": false,
     "tagline": "ONVIF integration for camera.ui.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-onvif/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-opencl": {
     "category": "ai-model",
     "featured": false,
     "tagline": "GPU-accelerated motion detection for camera.ui using OpenCL.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-opencl/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-opencv": {
     "category": "ai-model",
     "featured": false,
     "tagline": "Motion detection for camera.ui using OpenCV.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-opencv/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-openvino": {
     "category": "ai-model",
-    "featured": false,
+    "featured": true,
     "tagline": "OpenVINO detection backend for camera.ui, optimized for Intel hardware.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-openvino/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-pamdiff": {
     "category": "detection",
     "featured": false,
     "tagline": "Pixel-based motion detection for camera.ui using the pam-diff algorithm on ffmpeg PAM frames.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-pamdiff/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-ring": {
     "category": "camera-source",
     "featured": false,
     "tagline": "Integrates Ring cameras and doorbells into camera.ui, with device discovery, live streaming, and motion, battery, light, siren and doorbell events.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-ring/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-rust-motion": {
     "category": "detection",
-    "featured": false,
+    "featured": true,
     "tagline": "Native motion detection for camera.ui, powered by a Rust detector for low CPU usage.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-rust-motion/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-smtp": {
     "category": "detection",
     "featured": false,
     "tagline": "Motion detection for camera.ui via SMTP.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-smtp/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-tuya": {
     "category": "camera-source",
     "featured": false,
     "tagline": "Integrates Tuya / Smart Life cameras into camera.ui, with device discovery and live streaming.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-tuya/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-wasm-motion": {
     "category": "detection",
     "featured": false,
     "tagline": "Motion detection for camera.ui running as a WebAssembly module.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-wasm-motion/logo.png",
     "screenshots": []
   },
   "@camera.ui/camera-ui-wyze": {
     "category": "camera-source",
     "featured": false,
     "tagline": "Integrates Wyze cameras into camera.ui, with device discovery, live streaming and motion events.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-wyze/logo.png",
     "screenshots": []
   }
 }
