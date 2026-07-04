@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import platform
 from typing import Any
 
@@ -101,7 +102,9 @@ class ONNXPlugin(
                 "title": "Execution Provider",
                 "description": (
                     "Hardware backend for inference. 'auto' selects CoreML on macOS, "
-                    "CUDA on Linux/Windows (x86_64), CPU otherwise. Always falls back to CPU."
+                    "CUDA on Linux/Windows (x86_64), CPU otherwise. 'tensorrt' uses the NVIDIA "
+                    "TensorRT provider (slower first run while it builds/caches an engine). "
+                    "Always falls back to CPU."
                 ),
                 "enum": EXECUTION_PROVIDERS,
                 "store": True,
@@ -164,6 +167,25 @@ class ONNXPlugin(
         use_cuda = pref == "cuda" or (pref == "auto" and system in ("Linux", "Windows") and x86)
         use_coreml = pref == "coreml" or (pref == "auto" and system == "Darwin")
 
+        if pref == "tensorrt" and "TensorrtExecutionProvider" in available:
+            cache_dir = os.path.join(self.api.storagePath, "trt-engine-cache")
+            os.makedirs(cache_dir, exist_ok=True)
+            return [
+                [
+                    (
+                        "TensorrtExecutionProvider",
+                        {
+                            "device_id": device_id,
+                            "trt_engine_cache_enable": True,
+                            "trt_engine_cache_path": cache_dir,
+                            "trt_fp16_enable": True,
+                        },
+                    ),
+                    ("CUDAExecutionProvider", {"device_id": device_id}),
+                    "CPUExecutionProvider",
+                ]
+                for device_id in self._device_ids()
+            ]
         if use_cuda and "CUDAExecutionProvider" in available:
             return [
                 [

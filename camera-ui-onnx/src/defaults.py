@@ -65,5 +65,6 @@ OCR_INPUT_HEIGHT = 64
 CLIP_EMBEDDING_DIM = 512
 
 # "auto" -> CoreML on macOS, CUDA on Linux/Windows x86_64, CPU otherwise.
-EXECUTION_PROVIDERS = ["auto", "cpu", "cuda", "coreml"]
+# "tensorrt" -> NVIDIA TensorRT EP (CUDA + CPU fallback); builds/caches an engine on first run.
+EXECUTION_PROVIDERS = ["auto", "cpu", "cuda", "tensorrt", "coreml"]
 DEFAULT_EXECUTION_PROVIDER = "auto"
