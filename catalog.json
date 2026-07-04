@@ -31,6 +31,14 @@
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-eufy/logo.png",
     "screenshots": []
   },
+  "@camera.ui/camera-ui-hailo": {
+    "displayName": "Hailo",
+    "category": "detection",
+    "featured": false,
+    "tagline": "Hailo Edge AI (HailoRT) detection backend for camera.ui.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-hailo/logo.png",
+    "screenshots": []
+  },
   "@camera.ui/camera-ui-homekit": {
     "displayName": "HomeKit",
     "category": "automation",
