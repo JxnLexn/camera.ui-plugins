@@ -14,6 +14,7 @@ export const PYTHON = [
   'camera-ui-audio-yamnet',
   'camera-ui-coral',
   'camera-ui-coreml',
+  'camera-ui-hailo',
   'camera-ui-ncnn',
   'camera-ui-onnx',
   'camera-ui-opencl',

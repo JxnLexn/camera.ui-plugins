@@ -50,6 +50,7 @@ jobs:
             camera-ui-audio-yamnet: ['camera-ui-audio-yamnet/**']
             camera-ui-coral: ['camera-ui-coral/**']
             camera-ui-coreml: ['camera-ui-coreml/**']
+            camera-ui-hailo: ['camera-ui-hailo/**']
             camera-ui-ncnn: ['camera-ui-ncnn/**']
             camera-ui-onnx: ['camera-ui-onnx/**']
             camera-ui-eufy: ['camera-ui-eufy/**']

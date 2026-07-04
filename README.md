@@ -7,6 +7,7 @@ Official plugins for the camera.ui ecosystem.
 | [Coral](camera-ui-coral)               | `@camera.ui/camera-ui-coral`        |
 | [CoreML](camera-ui-coreml)             | `@camera.ui/camera-ui-coreml`       |
 | [Eufy](camera-ui-eufy)                 | `@camera.ui/camera-ui-eufy`         |
+| [Hailo](camera-ui-hailo)               | `@camera.ui/camera-ui-hailo`        |
 | [HomeKit](camera-ui-homekit)           | `@camera.ui/camera-ui-homekit`      |
 | [NCNN](camera-ui-ncnn)                 | `@camera.ui/camera-ui-ncnn`         |
 | [ONNX](camera-ui-onnx)                 | `@camera.ui/camera-ui-onnx`         |

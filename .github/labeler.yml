@@ -10,6 +10,9 @@ coreml:
 eufy:
   - changed-files:
       - any-glob-to-any-file: 'camera-ui-eufy/**'
+hailo:
+  - changed-files:
+      - any-glob-to-any-file: 'camera-ui-hailo/**'
 homekit:
   - changed-files:
       - any-glob-to-any-file: 'camera-ui-homekit/**'
