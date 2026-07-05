@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from camera_ui_sdk import DetectionLabel
 
-MODEL_BASE_URL = "https://raw.githubusercontent.com/cameraui/models/main/models/coral"
-MODEL_LFS_URL = "https://media.githubusercontent.com/media/cameraui/models/main/models/coral"
-
 model_version = "v1"
+
+_MODELS_HOST = "https://models.cameraui.com"
+MODEL_BASE_URL = f"{_MODELS_HOST}/{model_version}/coral"
+MODEL_LFS_URL = MODEL_BASE_URL
 
 OBJECT_MODELS: dict[str, int] = {
     "yolo-v9-s-320": 320,

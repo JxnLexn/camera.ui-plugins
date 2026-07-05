@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 from typing import Any
 
 from camera_ui_ml import (
@@ -116,6 +117,15 @@ class CoreMLPlugin(
                 "store": False,
                 "onGet": self._active_hardware,
             },
+            {
+                "type": "button",
+                "key": "redownload_models",
+                "title": "Re-download Models",
+                "description": "Clear the local model cache and download the latest models again.",
+                "color": "info",
+                "group": "Manage",
+                "onSet": self._redownload_models,
+            },
         ]
 
     def _active_hardware(self) -> str:
@@ -163,6 +173,12 @@ class CoreMLPlugin(
             *(self.get_ocr(n) for n in ocr),
             *(self.get_clip_encoder(n) for n in clip),
         )
+
+    async def _redownload_models(self) -> None:
+        self.logger.log("Re-downloading models (clearing cache)...")
+        shutil.rmtree(self.model_manager.model_path, ignore_errors=True)
+        await self._reload_models()
+        self.logger.success("Models re-downloaded")
 
     async def _close_all(self) -> None:
         await asyncio.gather(
@@ -251,7 +267,8 @@ class CoreMLPlugin(
     async def get_face_embedder(self, model_name: str) -> Embedder:
         embedder = self.face_embedders.get(model_name)
         if not embedder:
-            embedder = Embedder(self.model_manager, self.logger, size=FACE_EMBEDDER_INPUT_SIZE)
+            size = FACE_EMBEDDER_MODELS.get(model_name, FACE_EMBEDDER_INPUT_SIZE)
+            embedder = Embedder(self.model_manager, self.logger, size=size)
             self.face_embedders[model_name] = embedder
             await embedder.initialize(model_name)
         return embedder

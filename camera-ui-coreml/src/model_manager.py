@@ -48,6 +48,12 @@ class CoreMlModelManager(BaseModelManager):
             "manifest": (f"{MODEL_BASE_URL}/{manifest}", manifest),
         }
 
+    def clip_processor_files(self) -> Mapping[str, tuple[str, str]]:
+        return {
+            name: (f"{MODEL_BASE_URL}/clip-vit-base-patch32/{name}", f"clip-vit-base-patch32/{name}")
+            for name in self.CLIP_PROCESSOR_FILENAMES
+        }
+
     async def build_backend(self, model_name: str, paths: Mapping[str, str]) -> InferenceBackend:
         pkg_path = os.path.join(self.model_path, f"{model_name}.mlpackage")
         mode = self._get_compute_units()

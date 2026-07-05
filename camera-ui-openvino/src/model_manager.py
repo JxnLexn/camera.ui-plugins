@@ -31,6 +31,12 @@ class OpenVinoModelManager(BaseModelManager):
             "bin": (f"{MODEL_LFS_URL}/{bin_rel}", bin_rel),
         }
 
+    def clip_processor_files(self) -> Mapping[str, tuple[str, str]]:
+        return {
+            name: (f"{MODEL_BASE_URL}/clip-vit-base-patch32/{name}", f"clip-vit-base-patch32/{name}")
+            for name in self.CLIP_PROCESSOR_FILENAMES
+        }
+
     async def build_backend(self, model_name: str, paths: Mapping[str, str]) -> InferenceBackend:
         compiled, used = await asyncio.to_thread(self._compile, paths["xml"], self._get_device())
         self.logger.success(f"Loaded model: {model_name} ({used})")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 from typing import Any
 
 from camera_ui_ml import normalize_box
@@ -31,7 +32,9 @@ from sensors.object_sensor import HailoObjectSensor
 
 
 class HailoPlugin(BasePlugin, ObjectDetectionInterface):
-    def __init__(self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage[Any]) -> None:
+    def __init__(
+        self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage[Any]
+    ) -> None:
         super().__init__(logger, api, storage)
         self.model_manager = HailoModelManager(api.storagePath, logger)
 
@@ -52,6 +55,15 @@ class HailoPlugin(BasePlugin, ObjectDetectionInterface):
                 "store": False,
                 "onGet": self._active_hardware,
             },
+            {
+                "type": "button",
+                "key": "redownload_models",
+                "title": "Re-download Models",
+                "description": "Clear the local model cache and download the latest models again.",
+                "color": "info",
+                "group": "Manage",
+                "onSet": self._redownload_models,
+            },
         ]
 
     def _active_hardware(self) -> str:
@@ -63,6 +75,18 @@ class HailoPlugin(BasePlugin, ObjectDetectionInterface):
         if not backends:
             return "No models loaded yet"
         return ", ".join(dict.fromkeys(backends))
+
+    async def _reload_models(self) -> None:
+        obj = list(self.object_detectors)
+        await self._close_all()
+        self.model_manager.reset()
+        await asyncio.gather(*(self.get_object_detector(n) for n in obj))
+
+    async def _redownload_models(self) -> None:
+        self.logger.log("Re-downloading models (clearing cache)...")
+        shutil.rmtree(self.model_manager.model_path, ignore_errors=True)
+        await self._reload_models()
+        self.logger.success("Models re-downloaded")
 
     async def _close_all(self) -> None:
         await asyncio.gather(*(d.close() for d in self.object_detectors.values()))
@@ -104,7 +128,9 @@ class HailoPlugin(BasePlugin, ObjectDetectionInterface):
             self.object_detectors[model_name] = detector
             await detector.initialize(model_name)
             # HEF carries no embedded class names; inject the (mapped) labels.
-            detector.labels = {index: str(label) for index, label in OBJECT_LABELS.items()}
+            detector.labels = {
+                index: str(label) for index, label in OBJECT_LABELS.items()
+            }
         return detector
 
     async def objectDetectionSettings(self) -> list[JsonSchema] | None:

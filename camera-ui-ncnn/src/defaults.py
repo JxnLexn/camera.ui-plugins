@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from camera_ui_sdk import DetectionLabel
 
-MODEL_BASE_URL = "https://raw.githubusercontent.com/cameraui/models/main/models/ncnn"
-MODEL_LFS_URL = "https://media.githubusercontent.com/media/cameraui/models/main/models/ncnn"
-
 model_version = "v1"
+
+_MODELS_HOST = "https://models.cameraui.com"
+MODEL_BASE_URL = f"{_MODELS_HOST}/{model_version}/ncnn"
+MODEL_LFS_URL = MODEL_BASE_URL
 
 OBJECT_MODELS: dict[str, int] = {
     "yolo-v9-t-320": 320,
@@ -27,8 +28,10 @@ LPD_DETECTOR_MODELS: dict[str, int] = {
     "yolo-v9-s-608-license-plates": 608,
 }
 
+# value = model input size in px
 FACE_EMBEDDER_MODELS: dict[str, int] = {
-    "facenet-inceptionresnetv1-512": 512,
+    "facenet-inceptionresnetv1-512": 160,
+    "arcface-r100-512": 112,
 }
 
 OCR_MODELS: list[str] = [

@@ -2,12 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-YAMNET_MODEL_URL = (
-    "https://huggingface.co/thelou1s/yamnet/resolve/main/lite-model_yamnet_classification_tflite_1.tflite"
-)
-YAMNET_LABELS_URL = (
-    "https://raw.githubusercontent.com/tensorflow/models/master/research/audioset/yamnet/yamnet_class_map.csv"
-)
+YAMNET_MODEL_URL = "https://models.cameraui.com/v1/audio-yamnet/yamnet.tflite"
+YAMNET_LABELS_URL = "https://models.cameraui.com/v1/audio-yamnet/yamnet_class_map.csv"
 
 YAMNET_SAMPLE_RATE = 16000
 YAMNET_CHANNELS = 1

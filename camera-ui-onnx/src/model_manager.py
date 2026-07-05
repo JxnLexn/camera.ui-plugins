@@ -11,6 +11,7 @@ from camera_ui_sdk import LoggerService
 from defaults import (
     DEFAULT_CLIP_TEXT,
     DEFAULT_CLIP_VISION,
+    MODEL_BASE_URL,
     MODEL_LFS_URL,
     model_version,
 )
@@ -33,6 +34,12 @@ class OnnxModelManager(BaseModelManager):
     def model_files(self, model_name: str) -> Mapping[str, tuple[str, str]]:
         rel = self._rel_path(model_name)
         return {"model": (f"{MODEL_LFS_URL}/{rel}", rel)}
+
+    def clip_processor_files(self) -> Mapping[str, tuple[str, str]]:
+        return {
+            name: (f"{MODEL_BASE_URL}/clip-vit-base-patch32/{name}", f"clip-vit-base-patch32/{name}")
+            for name in self.CLIP_PROCESSOR_FILENAMES
+        }
 
     async def build_backend(self, model_name: str, paths: Mapping[str, str]) -> InferenceBackend:
         sessions = await asyncio.to_thread(self._build_sessions, paths["model"])
