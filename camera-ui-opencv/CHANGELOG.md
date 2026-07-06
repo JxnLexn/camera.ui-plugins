@@ -1,3 +1,7 @@
+## [1.0.3]
+
+- Bump camera.ui engine
+
 ## [1.0.2]
 
 - Bugfixes and improvements
