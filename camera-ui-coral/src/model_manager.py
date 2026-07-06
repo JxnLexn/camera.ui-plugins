@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Callable, Mapping
 from typing import Any
 
+import numpy as np
 from camera_ui_ml import BaseModelManager, InferenceBackend
 from camera_ui_sdk import LoggerService
 
@@ -39,8 +40,7 @@ class CoralModelManager(BaseModelManager):
         self.logger.success(f"Loaded model: {model_name} ({device})")
         return CoralBackend(interpreter, device)
 
-    @staticmethod
-    def _build(cpu_path: str, edgetpu_path: str, use_edgetpu: bool) -> tuple[Any, str]:
+    def _build(self, cpu_path: str, edgetpu_path: str, use_edgetpu: bool) -> tuple[Any, str]:
         from ai_edge_litert.interpreter import Interpreter, load_delegate
 
         if use_edgetpu:
@@ -48,10 +48,17 @@ class CoralModelManager(BaseModelManager):
                 delegate = load_delegate(_EDGETPU_LIB)
                 interpreter = Interpreter(model_path=edgetpu_path, experimental_delegates=[delegate])
                 interpreter.allocate_tensors()
+                self._warmup(interpreter)
                 return interpreter, "Edge TPU (Coral)"
-            except Exception:
-                pass  # no Coral / delegate available -> fall back to CPU
+            except Exception as error:
+                self.logger.warn(f"Edge TPU unavailable ({error}); falling back to CPU")
 
         interpreter = Interpreter(model_path=cpu_path)
         interpreter.allocate_tensors()
         return interpreter, "CPU"
+
+    @staticmethod
+    def _warmup(interpreter: Any) -> None:
+        for detail in interpreter.get_input_details():
+            interpreter.set_tensor(detail["index"], np.zeros(detail["shape"], dtype=detail["dtype"]))
+        interpreter.invoke()

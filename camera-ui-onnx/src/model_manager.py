@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+import numpy as np
 import onnxruntime as ort
 from camera_ui_ml import BaseModelManager, InferenceBackend
 from camera_ui_sdk import LoggerService
@@ -19,6 +20,16 @@ from inference import OnnxBackend
 
 # onnxruntime provider list, e.g. ["CUDAExecutionProvider", "CPUExecutionProvider"]
 ProviderList = Sequence[Any]
+
+_ORT_TO_NP: dict[str, Any] = {
+    "tensor(float)": np.float32,
+    "tensor(float16)": np.float16,
+    "tensor(double)": np.float64,
+    "tensor(int64)": np.int64,
+    "tensor(int32)": np.int32,
+    "tensor(uint8)": np.uint8,
+    "tensor(bool)": np.bool_,
+}
 
 
 class OnnxModelManager(BaseModelManager):
@@ -37,7 +48,10 @@ class OnnxModelManager(BaseModelManager):
 
     def clip_processor_files(self) -> Mapping[str, tuple[str, str]]:
         return {
-            name: (f"{MODEL_BASE_URL}/clip-vit-base-patch32/{name}", f"clip-vit-base-patch32/{name}")
+            name: (
+                f"{MODEL_BASE_URL}/clip-vit-base-patch32/{name}",
+                f"clip-vit-base-patch32/{name}",
+            )
             for name in self.CLIP_PROCESSOR_FILENAMES
         }
 
@@ -53,12 +67,23 @@ class OnnxModelManager(BaseModelManager):
 
     def _create_session(self, path: str, providers: list[Any]) -> Any:
         try:
-            return ort.InferenceSession(path, providers=providers)
+            session = ort.InferenceSession(path, providers=providers)
+            if providers != ["CPUExecutionProvider"]:
+                self._warmup(session)
+            return session
         except Exception as error:
             if providers == ["CPUExecutionProvider"]:
                 raise
             self.logger.warn(f"Accelerated provider unavailable ({error}); falling back to CPU")
             return ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+
+    @staticmethod
+    def _warmup(session: Any) -> None:
+        feeds: dict[str, Any] = {}
+        for inp in session.get_inputs():
+            shape = [dim if isinstance(dim, int) and dim > 0 else 1 for dim in inp.shape]
+            feeds[inp.name] = np.zeros(shape, dtype=_ORT_TO_NP.get(inp.type, np.float32))
+        session.run(None, feeds)
 
     @staticmethod
     def _rel_path(model_name: str) -> str:
