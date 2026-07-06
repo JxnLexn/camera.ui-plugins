@@ -1,3 +1,7 @@
+## [1.1.0]
+
+- Bump camera.ui engine to v2
+
 ## [1.0.4]
 
 - Bump camera.ui engine
