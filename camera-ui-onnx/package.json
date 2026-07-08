@@ -29,11 +29,17 @@
     "url": "https://github.com/cameraui/plugins/issues"
   },
   "engines": {
-    "camera.ui": ">=2.0.0",
+    "camera.ui": ">=2.0.5",
     "node": ">=22.0.0"
   },
-  "os": [],
-  "cpu": [],
+  "os": [
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
   "homepage": "https://github.com/cameraui/plugins/tree/main/camera-ui-onnx#readme",
   "keywords": [
     "camera-ui-plugin",
