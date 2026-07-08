@@ -38,9 +38,7 @@ class ClipEncoder:
         if self.initialized:
             return
         if self._init_task is None:
-            self._init_task = asyncio.create_task(
-                self._do_initialize(vision_model, text_model)
-            )
+            self._init_task = asyncio.create_task(self._do_initialize(vision_model, text_model))
         await self._init_task
 
     async def close(self) -> None:
@@ -83,10 +81,7 @@ class ClipEncoder:
     async def embed_frames(self, frames: list[VideoFrameData]) -> list[list[float]]:
         if not self._ready():
             return [[] for _ in frames]
-        return [
-            await self.embed_frame(frame["width"], frame["height"], frame["data"])
-            for frame in frames
-        ]
+        return [await self.embed_frame(frame["width"], frame["height"], frame["data"]) for frame in frames]
 
     def _ready(self) -> bool:
         return (
@@ -98,35 +93,29 @@ class ClipEncoder:
 
     async def _do_initialize(self, vision_model: str, text_model: str) -> None:
         try:
+            self.logger.log(f"Loading CLIP: {vision_model} + {text_model}...")
             self.vision = await self.manager.ensure_backend(vision_model)
             self.text = await self.manager.ensure_backend(text_model)
             processor_dir = await self.manager.ensure_clip_processor()
             if processor_dir is None:
-                raise RuntimeError(
-                    "CLIP processor files are not bundled (clip_processor_files is empty)"
-                )
-            self.processor = await asyncio.to_thread(
-                CLIPProcessor.from_pretrained, processor_dir
-            )
+                raise RuntimeError("CLIP processor files are not bundled (clip_processor_files is empty)")
+            self.processor = await asyncio.to_thread(CLIPProcessor.from_pretrained, processor_dir)
             if self.closed:
                 return
             self.initialized = True
             self.logger.success(f"Loaded CLIP: {vision_model} + {text_model}")
         except Exception as error:
             self.logger.error(f"Failed to initialize CLIP encoder: {error}")
+            raise
         finally:
             self._init_task = None
 
     def _vision_input(self, pil: Any) -> NDArray:
-        inputs = self.processor(
-            images=pil, return_tensors="np", padding="max_length", truncation=True
-        )
+        inputs = self.processor(images=pil, return_tensors="np", padding="max_length", truncation=True)
         return np.asarray(inputs["pixel_values"], dtype=np.float32)
 
     def _text_input(self, text: str) -> tuple[NDArray, NDArray]:
-        inputs = self.processor(
-            text=text, return_tensors="np", padding="max_length", truncation=True
-        )
+        inputs = self.processor(text=text, return_tensors="np", padding="max_length", truncation=True)
         return (
             np.asarray(inputs["input_ids"], dtype=np.int64),
             np.asarray(inputs["attention_mask"], dtype=np.int64),

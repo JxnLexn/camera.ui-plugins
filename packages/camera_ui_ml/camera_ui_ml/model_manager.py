@@ -27,13 +27,19 @@ class BaseModelManager(ABC):
         self.logger = logger
         self.model_path = os.path.join(storage_path, "models", version)
         self._load_tasks: dict[str, asyncio.Task[InferenceBackend]] = {}
+        self._build_lock = asyncio.Lock()
 
     async def ensure_backend(self, model_name: str) -> InferenceBackend:
         task = self._load_tasks.get(model_name)
         if task is None:
             task = asyncio.create_task(self._load(model_name))
             self._load_tasks[model_name] = task
-        return await task
+        try:
+            return await task
+        except Exception:
+            if self._load_tasks.get(model_name) is task:
+                del self._load_tasks[model_name]
+            raise
 
     def reset(self) -> None:
         self._load_tasks.clear()
@@ -57,9 +63,7 @@ class BaseModelManager(ABC):
         """Map of file key → (download_url, path relative to ``model_path``)."""
 
     @abstractmethod
-    async def build_backend(
-        self, model_name: str, paths: Mapping[str, str]
-    ) -> InferenceBackend:
+    async def build_backend(self, model_name: str, paths: Mapping[str, str]) -> InferenceBackend:
         """Build the runtime backend from the (already downloaded) local paths."""
 
     async def _load(self, model_name: str) -> InferenceBackend:
@@ -67,11 +71,9 @@ class BaseModelManager(ABC):
         for url, rel in files.values():
             await self._download(url, rel)
 
-        paths = {
-            key: os.path.join(self.model_path, rel)
-            for key, (_url, rel) in files.items()
-        }
-        return await self.build_backend(model_name, paths)
+        paths = {key: os.path.join(self.model_path, rel) for key, (_url, rel) in files.items()}
+        async with self._build_lock:
+            return await self.build_backend(model_name, paths)
 
     async def _download(self, url: str, rel: str) -> None:
         full_path = os.path.join(self.model_path, rel)

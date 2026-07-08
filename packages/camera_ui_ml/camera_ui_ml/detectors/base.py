@@ -38,6 +38,7 @@ class BaseDetector:
 
     async def _do_initialize(self, model_name: str) -> None:
         try:
+            self.logger.log(f"Loading {self.name}: {model_name}...")
             self.backend = await self.manager.ensure_backend(model_name)
             if self.closed:
                 return
@@ -46,6 +47,7 @@ class BaseDetector:
             self.logger.success(f"Loaded {self.name}: {model_name}")
         except Exception as error:
             self.logger.error(f"Failed to initialize {self.name}: {error}")
+            raise
         finally:
             self._init_task = None
 
