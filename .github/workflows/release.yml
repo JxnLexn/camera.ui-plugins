@@ -80,5 +80,5 @@ jobs:
       - name: Publish to npm (provenance via OIDC)
         working-directory: ${{ needs.resolve.outputs.plugin }}
         run: |
-          npm install -g npm@latest
+          npm install -g npm@11.18.0
           npx cui publish --${{ needs.resolve.outputs.dist_tag }} --yes --provenance
