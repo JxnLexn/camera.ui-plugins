@@ -1,3 +1,10 @@
+## [1.1.1]
+
+- Log the model name when a detector starts loading and surface initialization failures instead of swallowing them; a failed load is now rolled back so it can be retried
+- Model reloads no longer abort the whole batch when a single model fails to load
+- Update camera.ui SDK
+- Bump camera.ui engine to v2.0.5
+
 ## [1.1.0]
 
 - Bump camera.ui engine to v2

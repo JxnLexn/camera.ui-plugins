@@ -1,3 +1,9 @@
+## [1.1.1]
+
+- Load classifier labels off the event loop, alongside the model, so plugin startup no longer blocks
+- Update camera.ui SDK
+- Bump camera.ui engine to v2.0.5
+
 ## [1.1.0]
 
 - Bump camera.ui engine to v2

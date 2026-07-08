@@ -1,3 +1,9 @@
+## [1.1.1]
+
+- Run frame-difference, background-subtraction, and default motion detection off the event loop via the thread pool executor, keeping the async pipeline responsive
+- Update camera.ui SDK
+- Bump camera.ui engine to v2.0.5
+
 ## [1.1.0]
 
 - Bump camera.ui engine to v2

@@ -1,3 +1,9 @@
+## [1.1.1]
+
+- Await asynchronous storage saves when persisting refreshed tokens and updated configuration (SDK async storage API)
+- Update camera.ui SDK
+- Bump camera.ui engine to v2.0.5
+
 ## [1.1.0]
 
 - Bump camera.ui engine to v2
