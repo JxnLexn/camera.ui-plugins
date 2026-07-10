@@ -48,6 +48,8 @@ export class RecordingDelegate implements CameraRecordingDelegate {
     let isFirstPacket = true;
 
     try {
+      let pending: Buffer | undefined;
+
       for await (const buffer of this.recordingSession.getRecordingStream(signal)) {
         if (isFirstPacket) {
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -58,10 +60,14 @@ export class RecordingDelegate implements CameraRecordingDelegate {
         packetCount++;
         this.logger.debug(this.logPrefix, `Fragment ${packetCount}: ${buffer.length} bytes`);
 
-        yield {
-          data: buffer,
-          isLast: false,
-        };
+        if (pending !== undefined) {
+          yield { data: pending, isLast: false };
+        }
+        pending = buffer;
+      }
+
+      if (pending !== undefined) {
+        yield { data: pending, isLast: true };
       }
 
       this.logger.log(this.logPrefix, `Recording stream ${streamId} completed (${packetCount} fragments)`);
