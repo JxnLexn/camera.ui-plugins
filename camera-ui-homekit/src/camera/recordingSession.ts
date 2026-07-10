@@ -261,6 +261,10 @@ export class RecordingSession extends EventEmitter {
       gop: false,
     });
 
+    session.onError.subscribe((error) => {
+      this.logger.warn(this.logPrefix, 'FMP4 session error:', error.message);
+    });
+
     session.onEnded.subscribe(() => {
       this.logger.debug(this.logPrefix, 'FMP4 session ended; discarding');
       if (this.session === session) {

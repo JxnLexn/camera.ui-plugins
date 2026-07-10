@@ -154,6 +154,10 @@ export class StreamingSession {
     });
     this.streamingSession = session;
 
+    session.onError.subscribe((error) => {
+      this.cameraLogger.warn(`Live stream source error: ${error.message}`);
+    });
+
     this.setupInactivityDetection(session);
     this.setupRtcpSenderReports(session);
 
