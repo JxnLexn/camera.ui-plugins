@@ -366,17 +366,11 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
       });
 
       eufyClient.once('captcha request', async () => {
-        if (eufyClient!.isConnected()) {
-          return;
-        }
         this.logger.error(home.name, 'CAPTCHA Required! Please re-authenticate via UI and restart Plugin!');
         this.closeClient(home);
       });
 
       eufyClient.on('tfa request', async () => {
-        if (eufyClient!.isConnected()) {
-          return;
-        }
         this.logger.error(home.name, 'Two-Factor Authentication (2FA) Requested! Please re-authenticate via UI and restart Plugin!');
         this.closeClient(home);
       });

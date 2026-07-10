@@ -23,7 +23,13 @@ export class EufyP2PSource implements Source {
       throw new Error('EufyP2PSource closed during open');
     }
 
-    const inputs: MultiSourceInput[] = [{ input: stream.videostream, format: videoFormatOf(stream.metadata.videoCodec) }];
+    const inputs: MultiSourceInput[] = [
+      {
+        input: stream.videostream,
+        format: videoFormatOf(stream.metadata.videoCodec),
+        options: { framerate: String(stream.metadata.videoFPS || 15) },
+      },
+    ];
     if (hasAudio(stream.metadata.audioCodec)) {
       inputs.push({ input: stream.audiostream, format: 'aac' });
     }

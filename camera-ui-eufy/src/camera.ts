@@ -93,7 +93,7 @@ export class Camera {
 
   public async getStreamUrl(): Promise<string> {
     if (this.storage.values.useP2P && this.rtspServer) {
-      return this.rtspServer.url;
+      return `${this.rtspServer.url}#timeout=30`;
     }
     return this.getNativeRTSPUrl();
   }
@@ -207,7 +207,7 @@ export class Camera {
     // Lazy relay: acquires the Eufy livestream on first viewer, releases it after idleTimeout when the last leaves.
     this.relay = new Relay({
       source: new EufyP2PSource(this.localLivestreamManager, this.relayLogger),
-      idleTimeout: 10_000,
+      idleTimeout: this.eufyDevice.hasBattery() ? 10_000 : 30_000,
       logger: this.relayLogger,
     });
 
