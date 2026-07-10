@@ -21,7 +21,7 @@
     "update": "updates --update ./"
   },
   "dependencies": {
-    "@seydx/rtsp": "^1.0.0",
+    "@seydx/rtsp": "^1.0.2",
     "eufy-security-client": "file:../externals/eufy-security-client"
   },
   "devDependencies": {

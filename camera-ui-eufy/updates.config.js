@@ -1,3 +1,3 @@
 export default {
-  exclude: ['typescript', 'eslint', '@camera.ui/rtsp'],
+  exclude: ['typescript', 'eslint', 'eufy-security-client'],
 };
