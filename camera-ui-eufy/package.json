@@ -21,7 +21,7 @@
     "update": "updates --update ./"
   },
   "dependencies": {
-    "@seydx/rtsp": "^1.0.2",
+    "@seydx/rtsp": "^1.0.3",
     "eufy-security-client": "file:../externals/eufy-security-client"
   },
   "devDependencies": {
@@ -64,6 +64,6 @@
     "directory": "camera-ui-eufy"
   },
   "allowScripts": {
-    "node-av@6.1.1": true
+    "node-av@6.2.0-beta.5": true
   }
 }
