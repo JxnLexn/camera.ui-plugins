@@ -1,3 +1,7 @@
+## [1.1.2]
+
+- Bugfixes and improvements
+
 ## [1.1.1]
 
 - Fix resetting the sensor to defaults not persisting the area, threshold, blur radius, and dilation size values, because the storage writes were not awaited; defaults are now saved reliably

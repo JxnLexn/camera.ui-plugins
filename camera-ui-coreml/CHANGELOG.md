@@ -1,3 +1,7 @@
+## [1.1.2]
+
+- Bugfixes and improvements
+
 ## [1.1.1]
 
 - Log the model name at load start and surface initialization failures across object/face/plate detectors, the face embedder, OCR, and the CLIP encoder instead of swallowing them; a failed load is now rolled back so it can be retried

@@ -1,3 +1,7 @@
+## [1.1.2]
+
+- Bugfixes and improvements
+
 ## [1.1.1]
 
 - Hailo device/architecture detection now runs off the event loop, so startup no longer blocks while probing for the device

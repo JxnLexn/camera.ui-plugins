@@ -1,3 +1,7 @@
+## [1.1.2]
+
+- Bugfixes and improvements
+
 ## [1.1.1]
 
 - Run OpenCL detector initialization and per-frame motion processing off the event loop via the thread pool executor, keeping the async pipeline responsive

@@ -1,3 +1,7 @@
+## [1.1.2]
+
+- Bugfixes and improvements
+
 ## [1.1.1]
 
 - Removed the CoreML execution provider; "auto" now selects CUDA on Linux/Windows x86_64 and CPU otherwise

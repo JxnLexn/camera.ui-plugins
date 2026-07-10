@@ -1,3 +1,7 @@
+## [1.1.2]
+
+- Bugfixes and improvements
+
 ## [1.1.1]
 
 - Failed model initialization is now logged and surfaced instead of silently swallowed, and the failed model is evicted from cache so the next request retries cleanly

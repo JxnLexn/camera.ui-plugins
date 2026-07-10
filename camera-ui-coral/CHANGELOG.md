@@ -1,3 +1,7 @@
+## [1.1.2]
+
+- Bugfixes and improvements
+
 ## [1.1.1]
 
 - Log the model name when a detector starts loading and surface initialization failures instead of swallowing them; a failed load is now rolled back so it can be retried

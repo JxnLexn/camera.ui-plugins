@@ -1,3 +1,7 @@
+## [1.1.2]
+
+- Bugfixes and improvements
+
 ## [1.1.1]
 
 - Load classifier labels off the event loop, alongside the model, so plugin startup no longer blocks

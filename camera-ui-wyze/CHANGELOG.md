@@ -1,3 +1,7 @@
+## [1.1.2]
+
+- Bugfixes and improvements
+
 ## [1.1.1]
 
 - Await asynchronous storage saves when persisting refreshed tokens and updated configuration (SDK async storage API)
