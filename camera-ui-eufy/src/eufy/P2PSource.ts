@@ -35,27 +35,29 @@ export class EufyP2PSource implements Source {
         options: { framerate: String(stream.metadata.videoFPS || 15) },
       },
     ];
-    if (hasAudio(stream.metadata.audioCodec)) {
-      if (stream.metadata.audioCodec === AudioCodec.AAC_ELD) {
-        this.eldTranscoder = new RawAudioTranscoder({
-          from: {
-            codec: 'aac',
-            decoder: 'libfdk_aac',
-            sampleRate: ELD_SAMPLE_RATE,
-            channels: ELD_CHANNELS,
-            samplesPerFrame: ELD_FRAME_LENGTH,
-            config: buildAacEldConfig(ELD_SAMPLE_RATE, ELD_CHANNELS, ELD_FRAME_LENGTH),
-          },
-          to: { bitRate: 32000 },
-          logger: this.logger,
-          onError: (error) => this.logger?.error?.('Eufy ELD audio transcode failed — audio stops until the next stream start:', error),
-        });
-        await this.eldTranscoder.start();
-        stream.audiostream.on('data', (frame: Buffer) => this.eldTranscoder?.push(frame));
-        inputs.push({ input: this.eldTranscoder.stream, format: 'aac' });
-      } else {
-        inputs.push({ input: stream.audiostream, format: 'aac' });
-      }
+
+    const audioCodec = stream.metadata.audioCodec;
+    if (audioCodec === AudioCodec.AAC_ELD) {
+      this.eldTranscoder = new RawAudioTranscoder({
+        from: {
+          codec: 'aac',
+          decoder: 'libfdk_aac',
+          sampleRate: ELD_SAMPLE_RATE,
+          channels: ELD_CHANNELS,
+          samplesPerFrame: ELD_FRAME_LENGTH,
+          config: buildAacEldConfig(ELD_SAMPLE_RATE, ELD_CHANNELS, ELD_FRAME_LENGTH),
+        },
+        to: { bitRate: 32000 },
+        logger: this.logger,
+        onError: (error) => this.logger?.error?.('Eufy ELD audio transcode failed — audio stops until the next stream start:', error),
+      });
+      await this.eldTranscoder.start();
+      stream.audiostream.on('data', (frame: Buffer) => this.eldTranscoder?.push(frame));
+      inputs.push({ input: this.eldTranscoder.stream, format: 'aac' });
+    } else if (audioCodec === AudioCodec.AAC || audioCodec === AudioCodec.AAC_LC) {
+      inputs.push({ input: stream.audiostream, format: 'aac' });
+    } else if (audioCodec !== AudioCodec.NONE && audioCodec !== AudioCodec.UNKNOWN) {
+      this.logger?.warn?.(`Eufy reported an unsupported audio codec (${audioCodec}) — serving video only`);
     }
 
     this.multi = new MultiSource(inputs, { logger: this.logger });
@@ -82,8 +84,4 @@ export class EufyP2PSource implements Source {
 
 function videoFormatOf(codec: VideoCodec): string {
   return codec === VideoCodec.H265 ? 'hevc' : 'h264';
-}
-
-function hasAudio(codec: AudioCodec): boolean {
-  return codec !== AudioCodec.NONE && codec !== AudioCodec.UNKNOWN;
 }
