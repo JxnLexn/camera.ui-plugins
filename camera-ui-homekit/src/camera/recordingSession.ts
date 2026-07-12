@@ -285,6 +285,7 @@ export class RecordingSession extends EventEmitter {
         width: this.configuration?.videoCodec.resolution[0],
         height: this.configuration?.videoCodec.resolution[1],
         fps: this.configuration?.videoCodec.resolution[2],
+        bitrate: this.configuration?.videoCodec.parameters.bitRate ? this.configuration.videoCodec.parameters.bitRate * 1000 : undefined,
       },
     });
 
