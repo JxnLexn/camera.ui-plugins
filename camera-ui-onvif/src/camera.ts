@@ -257,7 +257,16 @@ export class OnvifCamera {
   }
 
   private async connectToDevice(url: string, username: string, password: string): Promise<Onvif> {
-    const cameraUrl = new URL(url);
+    const normalizedUrl = String(url ?? '').trim();
+
+    let cameraUrl: URL;
+    try {
+      cameraUrl = new URL(normalizedUrl.includes('://') ? normalizedUrl : `http://${normalizedUrl}`);
+    } catch {
+      const redacted = normalizedUrl.replace(/\/\/[^@/]*@/, '//***@');
+      throw new Error(`Invalid ONVIF device URL (type ${typeof url}): "${redacted}" — expected e.g. http://192.168.1.100`);
+    }
+
     const hostname = cameraUrl.hostname;
     const port = cameraUrl.port;
 

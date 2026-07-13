@@ -1,3 +1,7 @@
+## [1.1.3]
+
+- Device URLs entered without a scheme (`192.168.1.100` or `192.168.1.100:8080`) no longer fail with `Invalid URL`; a genuinely broken stored URL now logs the offending value instead of a bare TypeError
+
 ## [1.1.2]
 
 - Fixed motion/detection events never arriving on cameras that report an internal or wrong address for their event subscription — event polling now always uses the configured host and port
