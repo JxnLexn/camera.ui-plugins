@@ -339,6 +339,10 @@ func ensureStorageSchemas(storage *sdk.DeviceStorage) {
 			Title:  "Stream Profiles",
 			Hidden: true,
 			Store:  &storeTrue,
+			Items: &sdk.JsonSchema{
+				Type:  sdk.JsonSchemaTypeString,
+				Title: "Stream Profile",
+			},
 		},
 		{
 			Type:   sdk.JsonSchemaTypeBoolean,
