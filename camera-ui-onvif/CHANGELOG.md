@@ -1,3 +1,7 @@
+## [1.1.4]
+
+- Bump camera.ui engine and SDK
+
 ## [1.1.3]
 
 - Device URLs entered without a scheme (`192.168.1.100` or `192.168.1.100:8080`) no longer fail with `Invalid URL`; a genuinely broken stored URL now logs the offending value instead of a bare TypeError

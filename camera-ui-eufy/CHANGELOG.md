@@ -1,3 +1,7 @@
+## [1.1.4]
+
+- Bump camera.ui engine and SDK
+
 ## [1.1.3]
 
 - Bugfixes and improvements
