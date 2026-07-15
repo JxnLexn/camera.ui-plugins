@@ -36,7 +36,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
     const source = this.cameraDevice.snapshotSource ?? this.cameraDevice.streamSource;
 
     source
-      .snapshot()
+      .snapshot(true)
       .then((snapshot) => {
         let snapshotBuffer = snapshot ? Buffer.from(snapshot) : undefined;
         if (!snapshotBuffer || snapshotBuffer.length === 0) {
