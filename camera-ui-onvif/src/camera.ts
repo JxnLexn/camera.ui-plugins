@@ -43,7 +43,6 @@ export class OnvifCamera {
   }
 
   async initialize(initialCredentials?: { username: string; password: string; url: string }): Promise<void> {
-    // Suppress onSet-triggered reconnects while writing all 3 fields; connect() is called below.
     if (initialCredentials) {
       this.suppressReconnect = true;
       try {
@@ -73,11 +72,7 @@ export class OnvifCamera {
       this.camera.connect();
 
       this.capabilities = await this.detectCapabilities();
-      this.camera.logger.log('ONVIF capabilities - PTZ:', this.capabilities.hasPTZ, ', Events:', this.capabilities.hasEvents);
-
-      if (this.capabilities.advertisedTypes.length > 0) {
-        this.camera.logger.log('Advertised detection types:', this.capabilities.advertisedTypes.join(', '));
-      }
+      this.camera.logger.debug('ONVIF capabilities', JSON.stringify(this.capabilities, null, 2));
 
       if (this.capabilities.hasPTZ) {
         await this.setupPTZSensor(this.device);
@@ -191,6 +186,18 @@ export class OnvifCamera {
       this.camera.logger.warn('ONVIF event error:', error.message);
     });
 
+    this.device.events.on('resubscribed', () => {
+      this.camera.logger.trace('ONVIF pullpoint (re)subscribed');
+    });
+
+    this.device.events.on('pull', (count: number) => {
+      this.camera.logger.trace(`ONVIF pull cycle: ${count} message(s)`);
+    });
+
+    this.device.events.on('renewfailed', (error: Error) => {
+      this.camera.logger.debug('ONVIF subscription renew failed:', error.message ?? error);
+    });
+
     this.device.events.startEventLoop({ messageLimit: 10 });
     this.eventLoopRunning = true;
     this.camera.logger.log('Started ONVIF event listening (detection sensors assigned)');
@@ -205,17 +212,13 @@ export class OnvifCamera {
   }
 
   private handleEvent(message: NotificationMessage, capabilities: OnvifCapabilities): void {
-    this.camera.logger.debug('ONVIF event received:', message.topic?._ ?? '(no topic)');
-
     const motionData = parseMotionEvent(message);
     if (motionData) {
       this.trackDynamicCapability('motion', capabilities);
       if (this.motionSensor) {
-        this.camera.logger.debug('ONVIF motion event:', motionData.isMotion);
         this.motionSensor.handleMotion(motionData);
-      } else {
-        this.camera.logger.debug('ONVIF motion event dropped — no motion sensor registered');
       }
+
       return;
     }
 

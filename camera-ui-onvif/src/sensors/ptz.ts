@@ -1,12 +1,16 @@
 import { PTZCapability, PTZControl } from '@camera.ui/sdk';
 
-import type { CameraDevice, PTZDirection, PTZPosition } from '@camera.ui/sdk';
+import type { CameraDevice, PTZDirection, PTZPosition, PTZRelativeMove } from '@camera.ui/sdk';
 import type { Onvif, PTZStatus } from '@seydx/onvif';
 
 const POLL_INTERVAL_MS = 200;
 const POSITION_EPSILON = 0.001;
 const IDLE_POLLS_TO_STOP = 3;
 const FAST_PATH_GRACE_MS = 1500;
+
+// ONVIF FOV translation space: x/y in [-1, 1] where 1.0 shifts the view by
+// HALF the frame (SDK deltas are full frame fractions, hence the ×2 mapping)
+const FOV_TRANSLATION_SPACE = 'http://www.onvif.org/ver10/tptz/PanTiltSpaces/TranslationSpaceFov';
 
 export class OnvifPTZSensor extends PTZControl {
   private device: Onvif;
@@ -17,6 +21,7 @@ export class OnvifPTZSensor extends PTZControl {
   private idleStreak = 0;
   private lastPollErrorMessage?: string;
   private fastPathUntilTs = 0;
+  private supportsFovRelativeMove = false;
 
   constructor(cameraDevice: CameraDevice, device: Onvif, name = 'ONVIF PTZ') {
     super(name);
@@ -108,6 +113,40 @@ export class OnvifPTZSensor extends PTZControl {
     }
   }
 
+  override async setRelativeMove(move: PTZRelativeMove): Promise<void> {
+    if (!this.supportsFovRelativeMove) {
+      this.cameraDevice.logger.warn('PTZ relativeMove requested but camera has no FOV translation space');
+      return;
+    }
+
+    const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+    const x = clamp((move.panDelta ?? 0) * 2);
+    const y = clamp((move.tiltDelta ?? 0) * 2);
+    const zoom = clamp(move.zoomDelta ?? 0);
+
+    this.setMoving(true);
+    this.fastPathUntilTs = Date.now() + FAST_PATH_GRACE_MS;
+    this.lastPolledPosition = undefined;
+    this.idleStreak = 0;
+
+    try {
+      await this.device.ptz.relativeMove({
+        translation: {
+          panTilt: { x, y, space: FOV_TRANSLATION_SPACE },
+          ...(zoom !== 0 ? { zoom: { x: zoom } } : {}),
+        },
+      });
+
+      await super.setRelativeMove(move);
+    } catch (error) {
+      this.fastPathUntilTs = 0;
+      this.setMoving(false);
+      if (!this.ignoreError(error)) {
+        this.cameraDevice.logger.error('PTZ relativeMove failed:', error);
+      }
+    }
+  }
+
   override async setTargetPreset(preset: string | undefined): Promise<void> {
     if (!preset) {
       return;
@@ -161,14 +200,21 @@ export class OnvifPTZSensor extends PTZControl {
     const minZoom = this.device.defaultProfile?.PTZConfiguration?.zoomLimits?.range?.XRange?.min ?? 0;
     const maxZoom = this.device.defaultProfile?.PTZConfiguration?.zoomLimits?.range?.XRange?.max ?? 0;
 
-    const hasPan = hasPTZ && canPanTilt && minPan !== 0 && maxPan !== 0;
-    const hasTilt = hasPTZ && canPanTilt && minTilt !== 0 && maxTilt !== 0;
-    const hasZoom = hasPTZ && canZoom && minZoom !== 0 && maxZoom !== 0;
+    // a non-empty range is the signal; the generic zoom space is 0..1 per
+    // spec, so testing min !== 0 wrongly rejected every conforming camera
+    const hasPan = hasPTZ && canPanTilt && maxPan > minPan;
+    const hasTilt = hasPTZ && canPanTilt && maxTilt > minTilt;
+    const hasZoom = hasPTZ && canZoom && maxZoom > minZoom;
 
     const caps: PTZCapability[] = [];
     if (hasPan) caps.push(PTZCapability.Pan);
     if (hasTilt) caps.push(PTZCapability.Tilt);
     if (hasZoom) caps.push(PTZCapability.Zoom);
+
+    const hasAbsolute = this.device.defaultProfile?.PTZConfiguration?.defaultAbsolutePantTiltPositionSpace !== undefined;
+    const hasVelocity = this.device.defaultProfile?.PTZConfiguration?.defaultContinuousPanTiltVelocitySpace !== undefined;
+    if ((hasPan || hasTilt) && hasAbsolute) caps.push(PTZCapability.AbsolutePosition);
+    if ((hasPan || hasTilt) && hasVelocity) caps.push(PTZCapability.VelocityControl);
 
     let hasHome = false;
     let maxPresets = 0;
@@ -180,6 +226,29 @@ export class OnvifPTZSensor extends PTZControl {
         caps.push(PTZCapability.Home);
       }
       maxPresets = nodeValues.reduce((max, node) => Math.max(max, node.maximumNumberOfPresets ?? 0), 0);
+
+      // RelativeMove only with the FOV translation space: deltas there are
+      // view fractions; the generic space is fractions of the mechanical
+      // range and useless without per-camera calibration
+      this.supportsFovRelativeMove =
+        (hasPan || hasTilt) &&
+        nodeValues.some((node) => (node.supportedPTZSpaces?.relativePanTiltTranslationSpace ?? []).some((space) => space.URI === FOV_TRANSLATION_SPACE));
+      if (this.supportsFovRelativeMove) {
+        caps.push(PTZCapability.RelativeMove);
+      }
+
+      for (const node of nodeValues) {
+        const byType: Record<string, string[]> = {};
+        for (const [key, descs] of Object.entries(node.supportedPTZSpaces ?? {})) {
+          if (!Array.isArray(descs)) continue;
+          for (const desc of descs) {
+            const uri = (desc as { URI?: string } | undefined)?.URI;
+            if (!uri) continue;
+            (byType[key] ??= []).push(uri.split('/').pop() ?? uri);
+          }
+        }
+        this.cameraDevice.logger.trace(`PTZ node "${node.token ?? '?'}" supported spaces:`, byType);
+      }
     } catch {
       // ignore
     }
@@ -198,12 +267,26 @@ export class OnvifPTZSensor extends PTZControl {
       // ignore
     }
 
-    this.cameraDevice.logger.log('PTZ capabilities:', {
+    const cfg = this.device.defaultProfile?.PTZConfiguration;
+    const spaceName = (uri: string | undefined) => uri?.split('/').pop();
+    this.cameraDevice.logger.debug('PTZ default spaces:', {
+      absolutePanTilt: spaceName(cfg?.defaultAbsolutePantTiltPositionSpace),
+      relativePanTilt: spaceName(cfg?.defaultRelativePanTiltTranslationSpace),
+      continuousPanTilt: spaceName(cfg?.defaultContinuousPanTiltVelocitySpace),
+      absoluteZoom: spaceName(cfg?.defaultAbsoluteZoomPositionSpace),
+      relativeZoom: spaceName(cfg?.defaultRelativeZoomTranslationSpace),
+      continuousZoom: spaceName(cfg?.defaultContinuousZoomVelocitySpace),
+    });
+
+    this.cameraDevice.logger.debug('PTZ capabilities:', {
       pan: hasPan,
       tilt: hasTilt,
       zoom: hasZoom,
       home: hasHome,
       presets: presetsCount > 0 ? `${presetsCount}/${maxPresets || '?'}` : false,
+      relativeMoveFov: this.supportsFovRelativeMove,
+      absolutePosition: hasAbsolute,
+      velocityControl: hasVelocity,
     });
 
     if (!hasPan && !hasTilt && !hasZoom) {
