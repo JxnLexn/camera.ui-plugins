@@ -205,10 +205,6 @@ export class OnvifCamera {
       this.camera.logger.trace('ONVIF pullpoint (re)subscribed');
     });
 
-    this.device.events.on('pull', (count: number) => {
-      this.camera.logger.trace(`ONVIF pull cycle: ${count} message(s)`);
-    });
-
     this.device.events.on('renewfailed', (error: Error) => {
       this.camera.logger.debug('ONVIF subscription renew failed:', error.message ?? error);
     });

@@ -1,3 +1,7 @@
+## [1.1.6]
+
+- Remove debug logging
+
 ## [1.1.5]
 
 - Sensors now show their details in the sensor settings: event sensors list the camera event topics that feed them, the PTZ sensor shows axes, supported move commands and discovered presets
