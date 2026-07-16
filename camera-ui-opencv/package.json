@@ -21,9 +21,9 @@
   },
   "devDependencies": {
     "@camera.ui/cli": "^0.0.65",
-    "@camera.ui/sdk": "^0.0.19",
+    "@camera.ui/sdk": "^0.0.22",
     "cross-env": "^10.1.0",
-    "updates": "^17.18.2"
+    "updates": "^17.19.1"
   },
   "bugs": {
     "url": "https://github.com/cameraui/plugins/issues"
