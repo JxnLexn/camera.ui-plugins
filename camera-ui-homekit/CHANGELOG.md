@@ -1,6 +1,10 @@
 ## [1.1.4]
 
-- fix: use always fresh snapshots
+- Bugfixes and improvements
+
+## [1.1.4]
+
+- Bugfixes and improvements
 
 ## [1.1.3]
 

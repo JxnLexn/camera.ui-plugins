@@ -361,24 +361,12 @@ export class CameraAccessory extends Subscribed {
         type: 'boolean',
         key: 'adaptiveStreamSource',
         title: 'Adaptive Stream Source',
-        description: 'Match the source resolution to what HomeKit requests; off uses the primary source.',
+        description: 'When viewing remotely, match the source resolution to what HomeKit requests; off uses the primary source.',
         group: 'Advanced',
         defaultValue: true,
         store: true,
         onSet: async (state: boolean) => {
           this.cameraLogger.log('Adaptive stream source:', state);
-        },
-      },
-      {
-        type: 'boolean',
-        key: 'transcodeStreaming',
-        title: 'Transcode Streaming',
-        description: 'Always transcode instead of copying the stream.',
-        group: 'Advanced',
-        defaultValue: false,
-        store: true,
-        onSet: async (state: boolean) => {
-          this.cameraLogger.log('Transcode streaming:', state);
         },
       },
     ]);

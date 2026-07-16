@@ -207,7 +207,7 @@ export class StreamingSession {
     this.listenForVideoPackets(session);
 
     await session.startStream({
-      hardware: 'auto',
+      hardware: this.cameraAccessory.cameraStorage.values.useHardwareAcceleration ? 'auto' : undefined,
       video: {
         codec: 'h264',
         mtu: startStreamRequest.video.mtu,
