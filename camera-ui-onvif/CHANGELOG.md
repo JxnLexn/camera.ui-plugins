@@ -1,3 +1,9 @@
+## [1.1.8]
+
+- Fixed cameras becoming unresponsive after the connection dropped mid-session: a failed event poll ("other side closed", "HTTP error! status: 400") retried without pause, flooding the camera until it stopped answering ONVIF requests entirely, including discovery and PTZ. Failed polls now back off before retrying, and a broken connection no longer discards a still-valid event subscription
+- PTZ status polling no longer piles up requests while the camera is unresponsive; it pauses with increasing delays until the camera answers again
+- Less log noise: repeated event errors log once instead of flooding the camera log, with a "recovered" line once polling works again, and the capability dump on connect is now a short summary
+
 ## [1.1.7]
 
 - Cleanup

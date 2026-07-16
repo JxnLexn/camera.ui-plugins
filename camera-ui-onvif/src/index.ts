@@ -167,7 +167,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
     this.logger.log(`Connecting to ONVIF device: ${camera.name}...`);
     await onvif.connect();
 
-    // Get device information (must be called explicitly after connect)
     const deviceInfo = await onvif.device.getDeviceInformation();
     const cameraName = deviceInfo?.model ? `${deviceInfo.manufacturer ?? 'ONVIF'} ${deviceInfo.model}` : camera.name;
 
@@ -185,7 +184,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       info: {
         manufacturer: deviceInfo?.manufacturer,
         model: deviceInfo?.model,
-        // Some cameras return serialNumber as number, ensure it's a string
         serialNumber: deviceInfo?.serialNumber != null ? String(deviceInfo.serialNumber) : undefined,
         firmwareVersion: deviceInfo?.firmwareVersion,
       },
@@ -252,8 +250,6 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
 
     device.username = username;
     device.password = password;
-
-    // Kept in discoveredDevices for re-push on release; creds cleared in onCameraAdded after save.
 
     return config;
   }

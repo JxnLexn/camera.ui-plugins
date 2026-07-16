@@ -4,6 +4,7 @@ import type { CameraDevice, JsonSchema, PTZDirection, PTZPosition, PTZRelativeMo
 import type { Onvif, PTZStatus } from '@seydx/onvif';
 
 const POLL_INTERVAL_MS = 200;
+const POLL_BACKOFF_MAX_MS = 30_000;
 const POSITION_EPSILON = 0.001;
 const IDLE_POLLS_TO_STOP = 3;
 const FAST_PATH_GRACE_MS = 1500;
@@ -17,6 +18,9 @@ export class OnvifPTZSensor extends PTZControl {
   private cameraDevice: CameraDevice;
 
   private pollingTimer?: NodeJS.Timeout;
+  private pollInFlight = false;
+  private pollErrorStreak = 0;
+  private pollBackoffUntilTs = 0;
   private lastPolledPosition?: { pan?: number; tilt?: number; zoom?: number };
   private idleStreak = 0;
   private lastPollErrorMessage?: string;
@@ -29,7 +33,6 @@ export class OnvifPTZSensor extends PTZControl {
     this.device = device;
   }
 
-  // live values via onGet: capabilities are only known after initialize()
   override get storageSchema(): JsonSchema[] {
     const has = (cap: PTZCapability) => this.capabilities.includes(cap);
     return [
@@ -85,6 +88,8 @@ export class OnvifPTZSensor extends PTZControl {
     this.idleStreak = 0;
     this.lastPollErrorMessage = undefined;
     this.fastPathUntilTs = 0;
+    this.pollErrorStreak = 0;
+    this.pollBackoffUntilTs = 0;
     this.cameraDevice.logger.debug('PTZ sensor deassigned — stopped motion-state polling');
   }
 
@@ -239,8 +244,6 @@ export class OnvifPTZSensor extends PTZControl {
     const minZoom = this.device.defaultProfile?.PTZConfiguration?.zoomLimits?.range?.XRange?.min ?? 0;
     const maxZoom = this.device.defaultProfile?.PTZConfiguration?.zoomLimits?.range?.XRange?.max ?? 0;
 
-    // a non-empty range is the signal; the generic zoom space is 0..1 per
-    // spec, so testing min !== 0 wrongly rejected every conforming camera
     const hasPan = hasPTZ && canPanTilt && maxPan > minPan;
     const hasTilt = hasPTZ && canPanTilt && maxTilt > minTilt;
     const hasZoom = hasPTZ && canZoom && maxZoom > minZoom;
@@ -266,9 +269,6 @@ export class OnvifPTZSensor extends PTZControl {
       }
       maxPresets = nodeValues.reduce((max, node) => Math.max(max, node.maximumNumberOfPresets ?? 0), 0);
 
-      // RelativeMove only with the FOV translation space: deltas there are
-      // view fractions; the generic space is fractions of the mechanical
-      // range and useless without per-camera calibration
       this.supportsFovRelativeMove =
         (hasPan || hasTilt) &&
         nodeValues.some((node) => (node.supportedPTZSpaces?.relativePanTiltTranslationSpace ?? []).some((space) => space.URI === FOV_TRANSLATION_SPACE));
@@ -308,7 +308,7 @@ export class OnvifPTZSensor extends PTZControl {
 
     const cfg = this.device.defaultProfile?.PTZConfiguration;
     const spaceName = (uri: string | undefined) => uri?.split('/').pop();
-    this.cameraDevice.logger.debug('PTZ default spaces:', {
+    this.cameraDevice.logger.trace('PTZ default spaces:', {
       absolutePanTilt: spaceName(cfg?.defaultAbsolutePantTiltPositionSpace),
       relativePanTilt: spaceName(cfg?.defaultRelativePanTiltTranslationSpace),
       continuousPanTilt: spaceName(cfg?.defaultContinuousPanTiltVelocitySpace),
@@ -337,9 +337,10 @@ export class OnvifPTZSensor extends PTZControl {
   }
 
   private async pollStatus(): Promise<void> {
-    // Fast-path grace window: suppress polling so it can't second-guess a just-committed setVelocity.
     if (Date.now() < this.fastPathUntilTs) return;
+    if (this.pollInFlight || Date.now() < this.pollBackoffUntilTs) return;
 
+    this.pollInFlight = true;
     let status: PTZStatus;
     try {
       status = await this.device.ptz.getStatus();
@@ -349,10 +350,16 @@ export class OnvifPTZSensor extends PTZControl {
         this.cameraDevice.logger.trace('PTZ getStatus poll failed:', message);
         this.lastPollErrorMessage = message;
       }
+      this.pollErrorStreak++;
+      this.pollBackoffUntilTs = Date.now() + Math.min(1000 * 2 ** (this.pollErrorStreak - 1), POLL_BACKOFF_MAX_MS);
       return;
+    } finally {
+      this.pollInFlight = false;
     }
 
     this.lastPollErrorMessage = undefined;
+    this.pollErrorStreak = 0;
+    this.pollBackoffUntilTs = 0;
 
     const pt = status.moveStatus?.panTilt;
     const z = status.moveStatus?.zoom;
@@ -362,7 +369,6 @@ export class OnvifPTZSensor extends PTZControl {
       zoom: status.position?.zoom?.x,
     };
 
-    // Publish position changes for the autotracker; super.setPosition only writes SDK state, no hardware action.
     const current = this.position;
     const posDelta = Math.max(
       Math.abs((pos.pan ?? 0) - (current?.pan ?? 0)),
@@ -377,7 +383,6 @@ export class OnvifPTZSensor extends PTZControl {
       });
     }
 
-    // Primary signal: ONVIF MoveStatus (IDLE/MOVING, not UNKNOWN); some PTZs report only panTilt or only zoom.
     const ptUsable = pt === 'IDLE' || pt === 'MOVING';
     const zUsable = z === 'IDLE' || z === 'MOVING';
     if (ptUsable || zUsable) {
@@ -388,7 +393,6 @@ export class OnvifPTZSensor extends PTZControl {
       return;
     }
 
-    // Fallback: position-delta. Needs at least one prior sample.
     if (!this.lastPolledPosition) {
       this.lastPolledPosition = pos;
       return;
@@ -405,7 +409,6 @@ export class OnvifPTZSensor extends PTZControl {
       this.idleStreak = 0;
     } else {
       this.idleStreak++;
-      // Flip to IDLE only after N consecutive no-delta polls to ride out jitter.
       if (this.idleStreak >= IDLE_POLLS_TO_STOP) {
         this.setMoving(false);
       }

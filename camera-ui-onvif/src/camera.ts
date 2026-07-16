@@ -39,6 +39,7 @@ export class OnvifCamera {
   private dynamicCapabilities = new Set<EventCategory>();
   private eventLoopRunning = false;
   private capabilities?: OnvifCapabilities;
+  private lastEventErrorMessage?: string;
 
   private reconnectInFlight?: Promise<void>;
   private suppressReconnect = false;
@@ -81,7 +82,13 @@ export class OnvifCamera {
       this.camera.connect();
 
       this.capabilities = await this.detectCapabilities();
-      this.camera.logger.debug('ONVIF capabilities', JSON.stringify(this.capabilities, null, 2));
+      this.camera.logger.debug(
+        'ONVIF capabilities:',
+        JSON.stringify({ hasPTZ: this.capabilities.hasPTZ, hasEvents: this.capabilities.hasEvents, advertisedTypes: this.capabilities.advertisedTypes }),
+      );
+      if (this.capabilities.eventProperties) {
+        this.camera.logger.trace('ONVIF event properties', JSON.stringify(this.capabilities.eventProperties, null, 2));
+      }
 
       if (this.capabilities.hasPTZ) {
         await this.setupPTZSensor(this.device);
@@ -113,10 +120,7 @@ export class OnvifCamera {
   }
 
   async reconnect(): Promise<void> {
-    // Suppressed during batch credentials save — initialize() will call connect() itself
     if (this.suppressReconnect) return;
-
-    // Coalesce concurrent reconnects: if one is already in flight, return that promise
     if (this.reconnectInFlight) return this.reconnectInFlight;
 
     this.reconnectInFlight = this.doReconnect().finally(() => {
@@ -198,7 +202,19 @@ export class OnvifCamera {
     });
 
     this.device.events.on('error', (error: Error) => {
-      this.camera.logger.warn('ONVIF event error:', error.message);
+      if (error.message !== this.lastEventErrorMessage) {
+        this.camera.logger.warn('ONVIF event error:', error.message);
+        this.lastEventErrorMessage = error.message;
+      } else {
+        this.camera.logger.trace('ONVIF event error (repeated):', error.message);
+      }
+    });
+
+    this.device.events.on('pull', () => {
+      if (this.lastEventErrorMessage) {
+        this.camera.logger.log('ONVIF event polling recovered');
+        this.lastEventErrorMessage = undefined;
+      }
     });
 
     this.device.events.on('resubscribed', () => {
