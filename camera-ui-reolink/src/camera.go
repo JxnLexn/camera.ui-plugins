@@ -71,6 +71,7 @@ func (c *reolinkCamera) initialize(b *bridge.Bridge) error {
 		UID:            c.settings.UID,
 		Username:       c.settings.Username,
 		Password:       c.settings.Password,
+		Channel:        c.settings.Channel,
 		Streams:        c.settings.Streams,
 		IdleDisconnect: c.settings.BatteryCamera,
 		BatteryCamera:  c.settings.BatteryCamera,
@@ -299,6 +300,7 @@ const (
 	storageKeyPTZZoom       = "ptzZoom"
 	storageKeyHasDoorbell   = "hasDoorbell"
 	storageKeyHasAI         = "hasAI"
+	storageKeyChannel       = "channel"
 )
 
 func ensureStorageSchemas(storage *sdk.DeviceStorage) {
@@ -407,6 +409,13 @@ func ensureStorageSchemas(storage *sdk.DeviceStorage) {
 			Hidden: true,
 			Store:  &storeTrue,
 		},
+		{
+			Type:   sdk.JsonSchemaTypeNumber,
+			Key:    storageKeyChannel,
+			Title:  "Channel",
+			Hidden: true,
+			Store:  &storeTrue,
+		},
 	})
 }
 
@@ -427,6 +436,7 @@ func persistSettings(storage *sdk.DeviceStorage, settings cameraSettings) error 
 		storageKeyPTZZoom:       settings.PTZZoom,
 		storageKeyHasDoorbell:   settings.HasDoorbell,
 		storageKeyHasAI:         settings.HasAI,
+		storageKeyChannel:       settings.Channel,
 	}
 	for key, value := range values {
 		if err := storage.SetValue(key, value); err != nil {
@@ -452,6 +462,9 @@ func loadSettings(storage *sdk.DeviceStorage) cameraSettings {
 		PTZZoom:       boolValue(storage, storageKeyPTZZoom),
 		HasDoorbell:   boolValue(storage, storageKeyHasDoorbell),
 		HasAI:         boolValue(storage, storageKeyHasAI),
+	}
+	if v, ok := toInt(storage.GetValue(storageKeyChannel)); ok {
+		settings.Channel = v
 	}
 
 	switch v := storage.GetValue(storageKeyStreams).(type) {

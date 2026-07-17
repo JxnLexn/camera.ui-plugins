@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ const (
 	defaultWebhookPort = 8557
 	discoveryTimeout   = 5 * time.Second
 	adoptProbeTimeout  = 20 * time.Second
+	storageKeyNVRs     = "nvrs"
 )
 
 type ReolinkPlugin struct {
@@ -26,10 +28,33 @@ type ReolinkPlugin struct {
 
 	mu              sync.Mutex
 	bridge          *bridge.Bridge
-	cameras         map[string]*reolinkCamera            // camera ID → controller
-	existing        map[string]*sdk.CameraDevice         // camera ID → device
-	discovered      map[string]baichuan.DiscoveredDevice // discovery ID → device
+	cameras         map[string]*reolinkCamera    // camera ID → controller
+	existing        map[string]*sdk.CameraDevice // camera ID → device
+	discovered      map[string]discoveredEntry   // discovery ID → device (+ NVR channel)
+	nvrs            map[string]storedNVR         // base discovery ID → connected NVR
 	pendingSettings map[string]cameraSettings
+}
+
+type discoveredEntry struct {
+	device baichuan.DiscoveredDevice
+	// channel is -1 for standalone devices and the NVR entry itself;
+	// >= 0 for the per-channel entries an adopted NVR expands into.
+	channel int
+	// manual entries are user-asserted (different subnet, UID-only) and stay
+	// listed without a presence check.
+	manual bool
+}
+
+// storedNVR is a connected NVR persisted in the plugin storage, so channel
+// entries and their shared credentials survive plugin restarts.
+type storedNVR struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	IP       string `json:"ip,omitempty"`
+	UID      string `json:"uid,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Manual   bool   `json:"manual,omitempty"`
+	Channels []int  `json:"channels"`
 }
 
 type cameraSettings struct {
@@ -37,6 +62,7 @@ type cameraSettings struct {
 	UID           string
 	Username      string
 	Password      string
+	Channel       int
 	Streams       []string
 	BatteryCamera bool
 	HasSiren      bool
@@ -57,7 +83,8 @@ func NewPlugin(logger *sdk.Logger, api *sdk.PluginAPI, storage *sdk.DeviceStorag
 		BasePlugin:      sdk.NewBasePlugin(logger, api, storage),
 		cameras:         make(map[string]*reolinkCamera),
 		existing:        make(map[string]*sdk.CameraDevice),
-		discovered:      make(map[string]baichuan.DiscoveredDevice),
+		discovered:      make(map[string]discoveredEntry),
+		nvrs:            make(map[string]storedNVR),
 		pendingSettings: make(map[string]cameraSettings),
 	}
 
@@ -121,10 +148,104 @@ func (p *ReolinkPlugin) StorageSchema() []sdk.JsonSchema {
 			Description: "Adds the camera to the discovered list; adopt it from there with its credentials.",
 			OnClick:     p.onAddManual,
 		},
+		{
+			Type:        sdk.JsonSchemaTypeString,
+			Key:         "forgetNVRHost",
+			Title:       "NVR IP / UID",
+			Description: "Remove a connected NVR: deletes its stored credentials and channel entries from the discovered list. Already adopted channel cameras are not touched.",
+			Store:       &storeFalse,
+		},
+		{
+			Type:        sdk.JsonSchemaTypeSubmit,
+			Key:         "onForgetNVR",
+			Title:       "Forget NVR",
+			Description: "Removes the NVR entered above.",
+			OnClick:     p.onForgetNVR,
+		},
+		{
+			Type:   sdk.JsonSchemaTypeString,
+			Key:    storageKeyNVRs,
+			Title:  "Connected NVRs",
+			Hidden: true,
+			Store:  &storeTrue,
+		},
+	}
+}
+
+func (p *ReolinkPlugin) onForgetNVR(value any) *sdk.FormSubmitResponse {
+	values, _ := value.(map[string]any)
+	target, _ := values["forgetNVRHost"].(string)
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return &sdk.FormSubmitResponse{Toast: &sdk.ToastMessage{Type: "error", Message: "Enter the NVR's IP or UID."}}
+	}
+
+	p.mu.Lock()
+	baseID := ""
+	for id, nvr := range p.nvrs {
+		if nvr.IP == target || nvr.UID == target || strings.EqualFold(nvr.Name, target) {
+			baseID = id
+			break
+		}
+	}
+	if baseID == "" {
+		p.mu.Unlock()
+		return &sdk.FormSubmitResponse{Toast: &sdk.ToastMessage{Type: "error", Message: "No connected NVR matches " + target + "."}}
+	}
+
+	delete(p.nvrs, baseID)
+	p.persistNVRs()
+
+	prefix := baseID + ":ch"
+	removed := 0
+	for id, e := range p.discovered {
+		if e.channel >= 0 && strings.HasPrefix(id, prefix) {
+			delete(p.discovered, id)
+			removed++
+		}
+	}
+	p.mu.Unlock()
+
+	p.Logger.Log(fmt.Sprintf("Forgot NVR %s (%d channel entries removed)", target, removed))
+	return &sdk.FormSubmitResponse{Toast: &sdk.ToastMessage{Type: "success", Message: fmt.Sprintf("NVR removed (%d channel entries). Adopted cameras are unaffected.", removed)}}
+}
+
+func (p *ReolinkPlugin) loadNVRs() {
+	raw, _ := p.Storage.GetValue(storageKeyNVRs).(string)
+	if raw == "" {
+		return
+	}
+
+	var nvrs map[string]storedNVR
+	if err := json.Unmarshal([]byte(raw), &nvrs); err != nil {
+		p.Logger.Warn("Failed to parse stored NVRs:", err)
+		return
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.nvrs = nvrs
+	for baseID, nvr := range nvrs {
+		device := baichuan.DiscoveredDevice{IP: nvr.IP, UID: nvr.UID, Name: nvr.Name}
+		for _, ch := range nvr.Channels {
+			p.discovered[fmt.Sprintf("%s:ch%d", baseID, ch)] = discoveredEntry{device: device, channel: ch, manual: nvr.Manual}
+		}
+	}
+}
+
+func (p *ReolinkPlugin) persistNVRs() {
+	raw, err := json.Marshal(p.nvrs)
+	if err != nil {
+		return
+	}
+	if err := p.Storage.SetValue(storageKeyNVRs, string(raw)); err != nil {
+		p.Logger.Warn("Failed to persist NVRs:", err)
 	}
 }
 
 func (p *ReolinkPlugin) start() {
+	p.loadNVRs()
+
 	port := defaultRTSPPort
 	if v, ok := toInt(p.Storage.GetValue("rtspPort", defaultRTSPPort)); ok && v > 0 {
 		port = v
@@ -217,10 +338,10 @@ func (p *ReolinkPlugin) OnCameraReleased(cameraID string) error {
 	// Offer the released camera for re-adoption without waiting for a rescan.
 	if dev != nil && dev.NativeID() != "" {
 		p.mu.Lock()
-		device, ok := p.discovered[dev.NativeID()]
+		entry, ok := p.discovered[dev.NativeID()]
 		p.mu.Unlock()
 		if ok {
-			_ = p.API.DeviceManager.PushDiscoveredCameras([]sdk.DiscoveredCamera{discoveredCameraFrom(dev.NativeID(), device)})
+			_ = p.API.DeviceManager.PushDiscoveredCameras([]sdk.DiscoveredCamera{discoveredCameraFrom(dev.NativeID(), entry)})
 		}
 	}
 	return nil
@@ -235,13 +356,18 @@ func (p *ReolinkPlugin) OnDiscoverCameras() ([]sdk.DiscoveredCamera, error) {
 		p.Logger.Warn("Reolink LAN discovery failed:", err)
 	}
 
+	seen := make(map[string]struct{}, len(devices))
+
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	for _, device := range devices {
-		p.discovered[discoveryID(device)] = device
+		id := discoveryID(device)
+		seen[id] = struct{}{}
+		if existing, ok := p.discovered[id]; ok {
+			p.discovered[id] = discoveredEntry{device: device, channel: existing.channel, manual: existing.manual}
+			continue
+		}
+		p.discovered[id] = discoveredEntry{device: device, channel: -1}
 	}
-
 	adopted := make(map[string]struct{}, len(p.existing))
 	for _, dev := range p.existing {
 		if nativeID := dev.NativeID(); nativeID != "" {
@@ -250,43 +376,74 @@ func (p *ReolinkPlugin) OnDiscoverCameras() ([]sdk.DiscoveredCamera, error) {
 	}
 
 	out := make([]sdk.DiscoveredCamera, 0, len(p.discovered))
-	for id, device := range p.discovered {
+	for id, entry := range p.discovered {
 		if _, ok := adopted[id]; ok {
 			continue
 		}
-		out = append(out, discoveredCameraFrom(id, device))
+		if !entry.manual {
+			presenceID := id
+			if entry.channel >= 0 {
+				presenceID = baseDiscoveryID(id)
+			}
+			if _, ok := seen[presenceID]; !ok {
+				continue
+			}
+		}
+		out = append(out, discoveredCameraFrom(id, entry))
 	}
+	p.mu.Unlock()
 	return out, nil
 }
 
-func (p *ReolinkPlugin) OnGetCameraSettings(_ sdk.DiscoveredCamera) ([]sdk.JsonSchema, error) {
+func (p *ReolinkPlugin) OnGetCameraSettings(camera sdk.DiscoveredCamera) ([]sdk.JsonSchema, error) {
+	username := "admin"
+	password := ""
+
+	p.mu.Lock()
+	if entry, ok := p.discovered[camera.ID]; ok && entry.channel >= 0 {
+		if nvr, ok := p.nvrs[baseDiscoveryID(camera.ID)]; ok {
+			username = nvr.Username
+			password = nvr.Password
+		}
+	}
+	p.mu.Unlock()
+
 	return []sdk.JsonSchema{
 		{
 			Type:         sdk.JsonSchemaTypeString,
 			Key:          "username",
 			Title:        "Username",
 			Description:  "Username of the camera's local account.",
-			DefaultValue: "admin",
+			DefaultValue: username,
 			Required:     true,
 		},
 		{
-			Type:        sdk.JsonSchemaTypeString,
-			Key:         "password",
-			Title:       "Password",
-			Description: "Password of the camera's local account (set in the Reolink app).",
-			Format:      sdk.StringFormatPassword,
-			Required:    true,
+			Type:         sdk.JsonSchemaTypeString,
+			Key:          "password",
+			Title:        "Password",
+			Description:  "Password of the camera's local account (set in the Reolink app).",
+			Format:       sdk.StringFormatPassword,
+			DefaultValue: password,
+			Required:     true,
 		},
 	}, nil
 }
 
+func baseDiscoveryID(id string) string {
+	if idx := strings.LastIndex(id, ":ch"); idx >= 0 {
+		return id[:idx]
+	}
+	return id
+}
+
 func (p *ReolinkPlugin) OnAdoptCamera(camera sdk.DiscoveredCamera, settings map[string]any) (map[string]any, error) {
 	p.mu.Lock()
-	device, ok := p.discovered[camera.ID]
+	entry, ok := p.discovered[camera.ID]
 	p.mu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("unknown discovered camera %q", camera.ID)
 	}
+	device := entry.device
 
 	username, _ := settings["username"].(string)
 	password, _ := settings["password"].(string)
@@ -294,12 +451,21 @@ func (p *ReolinkPlugin) OnAdoptCamera(camera sdk.DiscoveredCamera, settings map[
 		return nil, fmt.Errorf("username and password are required")
 	}
 
+	channel := entry.channel
+	if channel < 0 {
+		channel = 0
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), adoptProbeTimeout)
 	defer cancel()
 
-	probe, err := probeCamera(ctx, device, username, password)
+	probe, err := probeCamera(ctx, device, username, password, uint8(channel)) //#nosec G115
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to %s: %w", camera.Name, err)
+	}
+
+	if entry.channel < 0 && probe.loginInfo.IsNVR() {
+		return nil, p.expandNVR(camera, entry, username, password, probe.channels)
 	}
 
 	camSettings := cameraSettings{
@@ -307,6 +473,7 @@ func (p *ReolinkPlugin) OnAdoptCamera(camera sdk.DiscoveredCamera, settings map[
 		UID:           device.UID,
 		Username:      username,
 		Password:      password,
+		Channel:       channel,
 		Streams:       probe.streams,
 		BatteryCamera: probe.caps.Battery,
 		HasSiren:      probe.caps.Siren,
@@ -366,13 +533,73 @@ func (p *ReolinkPlugin) OnAdoptCamera(camera sdk.DiscoveredCamera, settings map[
 	}, nil
 }
 
-type probeResult struct {
-	info    *baichuan.DevInfo
-	caps    baichuan.ChannelCapabilities
-	streams []string
+func (p *ReolinkPlugin) expandNVR(camera sdk.DiscoveredCamera, nvrEntry discoveredEntry, username string, password string, channels []int) error {
+	if len(channels) == 0 {
+		return fmt.Errorf("NVR %s reports no connected cameras", camera.Name)
+	}
+	device := nvrEntry.device
+
+	p.mu.Lock()
+	p.nvrs[camera.ID] = storedNVR{
+		Username: username,
+		Password: password,
+		IP:       device.IP,
+		UID:      device.UID,
+		Name:     device.Name,
+		Manual:   nvrEntry.manual,
+		Channels: channels,
+	}
+	p.persistNVRs()
+
+	adopted := make(map[string]struct{}, len(p.existing))
+	for _, dev := range p.existing {
+		if nativeID := dev.NativeID(); nativeID != "" {
+			adopted[nativeID] = struct{}{}
+		}
+	}
+
+	entries := make([]sdk.DiscoveredCamera, 0, len(channels))
+	valid := make(map[string]struct{}, len(channels))
+	for _, ch := range channels {
+		chID := fmt.Sprintf("%s:ch%d", camera.ID, ch)
+		valid[chID] = struct{}{}
+		chEntry := discoveredEntry{device: device, channel: ch, manual: nvrEntry.manual}
+		p.discovered[chID] = chEntry
+		if _, ok := adopted[chID]; ok {
+			continue
+		}
+		entries = append(entries, discoveredCameraFrom(chID, chEntry))
+	}
+
+	prefix := camera.ID + ":ch"
+	for id, e := range p.discovered {
+		if e.channel >= 0 && strings.HasPrefix(id, prefix) {
+			if _, ok := valid[id]; !ok {
+				delete(p.discovered, id)
+			}
+		}
+	}
+	p.mu.Unlock()
+
+	if len(entries) > 0 {
+		if err := p.API.DeviceManager.PushDiscoveredCameras(entries); err != nil {
+			return fmt.Errorf("push NVR channels: %w", err)
+		}
+	}
+
+	p.Logger.Log(fmt.Sprintf("NVR %s expanded into %d channel camera(s)", camera.Name, len(entries)))
+	return fmt.Errorf("NVR detected: %d channel camera(s) were added to the discovered list — adopt each channel individually (credentials are prefilled)", len(entries))
 }
 
-func probeCamera(ctx context.Context, device baichuan.DiscoveredDevice, username string, password string) (probeResult, error) {
+type probeResult struct {
+	info      *baichuan.DevInfo
+	caps      baichuan.ChannelCapabilities
+	streams   []string
+	loginInfo baichuan.LoginDeviceInfo
+	channels  []int
+}
+
+func probeCamera(ctx context.Context, device baichuan.DiscoveredDevice, username string, password string, channel uint8) (probeResult, error) {
 	cfg := baichuan.Config{
 		Host:     device.IP,
 		Port:     9000,
@@ -395,18 +622,25 @@ func probeCamera(ctx context.Context, device baichuan.DiscoveredDevice, username
 	}
 
 	result := probeResult{streams: []string{"main", "sub"}}
+	result.loginInfo = client.LoginDeviceInfo()
 
-	if info, err := client.GetDevInfo(ctx, 0); err == nil {
+	if result.loginInfo.IsNVR() {
+		if channels, err := client.OccupiedChannels(ctx); err == nil {
+			result.channels = channels
+		}
+	}
+
+	if info, err := client.GetDevInfo(ctx); err == nil {
 		result.info = info
 	}
 
 	if support, err := client.GetSupport(ctx); err == nil {
-		if caps, ok := support.CapabilitiesFor(0); ok {
+		if caps, ok := support.CapabilitiesFor(channel); ok {
 			result.caps = caps
 		}
 	}
 
-	if profiles, err := client.StreamProfiles(ctx, 0); err == nil && len(profiles) > 0 {
+	if profiles, err := client.StreamProfiles(ctx, channel); err == nil && len(profiles) > 0 {
 		streams := make([]string, 0, len(profiles))
 		for _, profile := range profiles {
 			streams = append(streams, profile.Name)
@@ -436,12 +670,13 @@ func (p *ReolinkPlugin) onAddManual(value any) *sdk.FormSubmitResponse {
 
 	device := baichuan.DiscoveredDevice{IP: host, UID: uid, Name: name}
 	id := discoveryID(device)
+	entry := discoveredEntry{device: device, channel: -1, manual: true}
 
 	p.mu.Lock()
-	p.discovered[id] = device
+	p.discovered[id] = entry
 	p.mu.Unlock()
 
-	if err := p.API.DeviceManager.PushDiscoveredCameras([]sdk.DiscoveredCamera{discoveredCameraFrom(id, device)}); err != nil {
+	if err := p.API.DeviceManager.PushDiscoveredCameras([]sdk.DiscoveredCamera{discoveredCameraFrom(id, entry)}); err != nil {
 		p.Logger.Error("Failed to push manual camera:", err)
 		return &sdk.FormSubmitResponse{Toast: &sdk.ToastMessage{Type: "error", Message: "Failed to add camera."}}
 	}
@@ -460,16 +695,19 @@ func discoveryID(device baichuan.DiscoveredDevice) string {
 	}
 }
 
-func discoveredCameraFrom(id string, device baichuan.DiscoveredDevice) sdk.DiscoveredCamera {
-	name := device.Name
+func discoveredCameraFrom(id string, entry discoveredEntry) sdk.DiscoveredCamera {
+	name := entry.device.Name
 	if name == "" {
-		name = "Reolink " + device.IP
+		name = "Reolink " + entry.device.IP
+	}
+	if entry.channel >= 0 {
+		name = fmt.Sprintf("%s CH%d", name, entry.channel+1)
 	}
 	return sdk.DiscoveredCamera{
 		ID:           id,
 		Name:         name,
 		Manufacturer: "Reolink",
-		Address:      device.IP,
+		Address:      entry.device.IP,
 	}
 }
 
