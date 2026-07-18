@@ -83,6 +83,7 @@ export class CameraAccessory extends Subscribed {
     this.published = false;
 
     if (this.accessory) {
+      const accessory = this.accessory;
       try {
         if (destroy) {
           this.cameraLogger.log('Removing...');
@@ -94,7 +95,9 @@ export class CameraAccessory extends Subscribed {
       } finally {
         await this.resetAccessory(destroy);
         const advertiseAddress = await this.cameraStorage.getValue<string>('advertiseAddress')!;
-        this.publishedExternalAccessories.delete(advertiseAddress);
+        if (this.publishedExternalAccessories.get(advertiseAddress) === accessory) {
+          this.publishedExternalAccessories.delete(advertiseAddress);
+        }
       }
     }
   }

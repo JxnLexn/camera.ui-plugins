@@ -49,7 +49,7 @@ export class RecordingSession extends EventEmitter {
     if (active) {
       this.restartPrebuffer();
     } else {
-      void this.stopPrebuffer();
+      this.stopPrebuffer();
     }
   }
 
@@ -173,7 +173,7 @@ export class RecordingSession extends EventEmitter {
     this.collectAbort?.abort();
     this.prebuffer = [];
 
-    void this.enqueueLifecycle(async () => {
+    this.enqueueLifecycle(async () => {
       await this.stopSession();
 
       if (revision !== this.lifecycleRevision || this.stopped || !this.recordingActive || !this.configuration) {
