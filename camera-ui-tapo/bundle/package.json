@@ -1,0 +1,38 @@
+{
+  "displayName": "TP-Link Tapo",
+  "name": "@camera.ui/camera-ui-tapo",
+  "version": "0.1.0",
+  "description": "Lokale TP-Link-Tapo-Integration mit ONVIF/RTSP, Ereignissensoren, Videobewegungserkennung und H200-Türklingelereignissen.",
+  "author": "camera.ui contributors",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "rimraf dist && npm run build:onvif && tsc",
+    "build:onvif": "npm --prefix ../externals/onvif ci --ignore-scripts && npm --prefix ../externals/onvif run build",
+    "bundle": "npm run format && npm run lint && npm run build && cui bundle",
+    "bundle:dev": "npm run format && npm run lint && npm run build && cross-env MODE=development cui bundle",
+    "format": "prettier --write \"src/\" --ignore-unknown --no-error-on-unmatched-pattern",
+    "lint": "eslint --fix .",
+    "test": "vitest run"
+  },
+  "engines": {
+    "camera.ui": ">=2.0.12",
+    "node": ">=22.0.0"
+  },
+  "os": [],
+  "cpu": [],
+  "keywords": [
+    "camera-ui-plugin",
+    "tapo",
+    "tp-link",
+    "onvif",
+    "rtsp",
+    "doorbell",
+    "h200"
+  ],
+  "license": "MIT",
+  "files": [
+    "bundle.zip",
+    "CHANGELOG.md"
+  ]
+}
