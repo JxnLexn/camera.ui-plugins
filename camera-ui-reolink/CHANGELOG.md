@@ -1,3 +1,7 @@
+## [1.1.1]
+
+- Bump camera.ui engine and SDK
+
 ## [1.1.0]
 
 - Add NVR/Hub support: adopting an NVR lists every occupied channel as its own camera, with per-channel capability detection (AI, siren, spotlight, PTZ) and shared credentials that are prefilled and survive restarts
