@@ -1,5 +1,6 @@
 ## [1.1.5]
 
+- Exclude downloaded models from backups
 - Update deps
 
 ## [1.1.4]

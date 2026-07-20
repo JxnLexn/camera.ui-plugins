@@ -1,3 +1,7 @@
+## [1.1.5]
+
+- Exclude downloaded models from backups
+
 ## [1.1.4]
 
 - Cleanup
