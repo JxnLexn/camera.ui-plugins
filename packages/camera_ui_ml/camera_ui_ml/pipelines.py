@@ -105,13 +105,12 @@ async def _detect_plates_one(
     for (_cid, conf, box), result in zip(raw, ocr_results, strict=False):
         if result is None or not result.text:
             continue
-        # box conf = "this looks like a plate", ocr conf = "the text is legible";
-        # combine so illegible reads rank low for the downstream vote
         detections.append(
             {
                 "label": "vehicle",
                 "attribute": "license_plate",
-                "confidence": float(conf) * float(result.confidence),
+                "confidence": float(conf),
+                "ocrConfidence": float(result.confidence),
                 "plateText": result.text,
                 "box": normalize_box(box, width, height),
             }
