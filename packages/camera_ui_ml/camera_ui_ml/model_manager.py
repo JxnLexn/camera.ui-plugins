@@ -13,6 +13,13 @@ from .backend import InferenceBackend
 _CHUNK = 1024 * 1024
 
 
+def _write_backup_ignore(models_root: str) -> None:
+    os.makedirs(models_root, exist_ok=True)
+    marker = os.path.join(models_root, ".backupignore")
+    if not os.path.isfile(marker):
+        open(marker, "a").close()
+
+
 class BaseModelManager(ABC):
     CLIP_PROCESSOR_FILENAMES = (
         "preprocessor_config.json",
@@ -28,6 +35,7 @@ class BaseModelManager(ABC):
         self.model_path = os.path.join(storage_path, "models", version)
         self._load_tasks: dict[str, asyncio.Task[InferenceBackend]] = {}
         self._build_lock = asyncio.Lock()
+        _write_backup_ignore(os.path.join(storage_path, "models"))
 
     async def ensure_backend(self, model_name: str) -> InferenceBackend:
         task = self._load_tasks.get(model_name)
