@@ -12,8 +12,6 @@ export class RecordingSession extends EventEmitter {
   private readonly logPrefix = '[HKSV]';
   private readonly fragmentTimeout = 8000;
   private readonly sessionRestartDelay = 3000;
-  private readonly recordingFailureWindow = 60000;
-  private readonly recordingFailureThreshold = 3;
 
   private session?: Fmp4Session;
   private sessionSubscriptions: { unsubscribe(): void }[] = [];
@@ -32,7 +30,6 @@ export class RecordingSession extends EventEmitter {
   private liveQueue: Buffer[] | null = null;
   private liveResolve: ((box: Buffer | null) => void) | null = null;
   private liveError?: Error;
-  private recordingFailures: number[] = [];
 
   constructor(
     private cameraAccessory: CameraAccessory,
@@ -157,20 +154,6 @@ export class RecordingSession extends EventEmitter {
     this.liveResolve = null;
     this.liveQueue = null;
     resolve?.(null);
-  }
-
-  public reportRecordingFailure(): void {
-    const now = Date.now();
-    this.recordingFailures = this.recordingFailures.filter((timestamp) => now - timestamp < this.recordingFailureWindow);
-    this.recordingFailures.push(now);
-
-    if (this.recordingFailures.length < this.recordingFailureThreshold) {
-      return;
-    }
-
-    this.recordingFailures = [];
-    this.logger.warn(this.logPrefix, 'Repeated HKSV recording failures; restarting this camera\'s FMP4 session');
-    this.refreshPrebuffer();
   }
 
   public async stop(): Promise<void> {

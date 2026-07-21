@@ -77,7 +77,6 @@ export class RecordingDelegate implements CameraRecordingDelegate {
       this.logger.log(this.logPrefix, `Recording stream ${streamId} completed (${packetCount} fragments)`);
     } catch (error) {
       this.logger.error(this.logPrefix, `Recording stream ${streamId} error:`, error);
-      this.recordingSession.reportRecordingFailure();
       throw new HDSProtocolError(HDSProtocolSpecificErrorReason.UNEXPECTED_FAILURE);
     } finally {
       this.cleanup(streamId);
@@ -97,9 +96,6 @@ export class RecordingDelegate implements CameraRecordingDelegate {
 
     if (this.activeStreamId === streamId) {
       this.recordingSession.closeCurrentRecording();
-      if (reason === HDSProtocolSpecificErrorReason.UNEXPECTED_FAILURE) {
-        this.recordingSession.reportRecordingFailure();
-      }
       this.cleanup(streamId);
     }
   }
