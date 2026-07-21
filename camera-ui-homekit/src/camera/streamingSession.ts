@@ -160,11 +160,17 @@ export class StreamingSession {
     }
 
     const source = this.selectStreamSource(startStreamRequest, remote);
-    const session = source.createRtpSession({
-      audio: true,
-      video: true,
-      backchannel: true,
-    });
+    const probe = await source.probeStream({ video: true }).catch(() => undefined);
+    const useHomekitSource = probe?.video.some((stream) => stream.codec === 'hevc') ?? false;
+    const session = source.createRtpSession(
+      useHomekitSource && source.homekitUrls
+        ? source.homekitUrls.rtsp.base
+        : {
+            audio: true,
+            video: true,
+            backchannel: true,
+          },
+    );
     this.streamingSession = session;
 
     session.onError.subscribe((error) => {
