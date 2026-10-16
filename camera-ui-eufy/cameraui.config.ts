@@ -5,7 +5,7 @@ const mode = process.env.MODE || 'production';
 const config: CameraUiBuildOptions = {
   input: ['src/index.ts'],
   mode: mode === 'development' ? 'development' : 'production',
-  external: [],
+  external: ['node-datachannel'],
   additionalFiles: [],
 };
 
