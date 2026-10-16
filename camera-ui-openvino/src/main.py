@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-from typing import Any
+from typing import Any, cast
 
 import openvino as ov
 from camera_ui_ml import (
@@ -32,6 +32,7 @@ from camera_ui_sdk import (
     ClipDetectionPluginResponse,
     ClipTextEmbeddingResult,
     Detection,
+    DetectionLabel,
     DeviceStorage,
     FaceDetection,
     FaceDetectionInterface,
@@ -406,7 +407,7 @@ class OpenVinoPlugin(
         width, height = frame["width"], frame["height"]
         detections: list[Detection] = [
             {
-                "label": detector.labels.get(cid, "unknown"),  # type: ignore[typeddict-item]
+                "label": cast(DetectionLabel, detector.labels.get(cid, "unknown")),
                 "confidence": conf,
                 "box": normalize_box(box, width, height),
             }

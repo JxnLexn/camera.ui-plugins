@@ -4,7 +4,7 @@ import asyncio
 import ctypes.util
 import glob
 import shutil
-from typing import Any
+from typing import Any, cast
 
 from camera_ui_ml import (
     BoxDetector,
@@ -18,6 +18,7 @@ from camera_ui_sdk import (
     BasePlugin,
     CameraDevice,
     Detection,
+    DetectionLabel,
     DeviceStorage,
     ImageMetadata,
     JsonSchema,
@@ -183,7 +184,7 @@ class CoralPlugin(BasePlugin, ObjectDetectionInterface):
         width, height = frame["width"], frame["height"]
         detections: list[Detection] = [
             {
-                "label": detector.labels.get(cid, "unknown"),  # type: ignore[typeddict-item]
+                "label": cast(DetectionLabel, detector.labels.get(cid, "unknown")),
                 "confidence": conf,
                 "box": normalize_box(box, width, height),
             }

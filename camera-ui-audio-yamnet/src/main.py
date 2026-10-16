@@ -25,7 +25,7 @@ from sensor import YAMNetAudioSensor
 
 
 class YAMNetPlugin(BasePlugin, AudioDetectionInterface):
-    def __init__(self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage) -> None:  # type: ignore[type-arg]
+    def __init__(self, logger: LoggerService, api: PluginAPI, storage: DeviceStorage[Any]) -> None:
         super().__init__(logger, api, storage)
 
         self.sensors: dict[str, YAMNetAudioSensor] = {}

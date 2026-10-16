@@ -4,7 +4,7 @@ import asyncio
 import os
 import platform
 import shutil
-from typing import Any
+from typing import Any, cast
 
 import onnxruntime as ort
 from camera_ui_ml import (
@@ -34,6 +34,7 @@ from camera_ui_sdk import (
     ClipDetectionPluginResponse,
     ClipTextEmbeddingResult,
     Detection,
+    DetectionLabel,
     DeviceStorage,
     FaceDetection,
     FaceDetectionInterface,
@@ -410,7 +411,7 @@ class ONNXPlugin(
         width, height = frame["width"], frame["height"]
         detections: list[Detection] = [
             {
-                "label": detector.labels.get(cid, "unknown"),  # type: ignore[typeddict-item]
+                "label": cast(DetectionLabel, detector.labels.get(cid, "unknown")),
                 "confidence": conf,
                 "box": normalize_box(box, width, height),
             }
