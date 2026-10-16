@@ -1,3 +1,7 @@
+## [1.2.8]
+
+- Bump camera.ui engine and SDK
+
 ## [1.2.7]
 
 - Bump camera.ui engine and SDK

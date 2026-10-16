@@ -1,12 +1,18 @@
 ## [2.0.5]
 
-- **Battery cameras and doorbells are recognized when you add them.** camera.ui then sets up a battery camera so it can sleep. Needs camera.ui 2.3.1.
-- The live view freezes less often. A frame lost on the way, or cut between two network packets, stopped the picture until the next full frame arrived
-- Cameras behind a HomeBase 3 keep streaming. After a while every new live view failed until the connection was rebuilt
-- Cameras behind a HomeBase 2 show the picture of their latest event, and an event that arrives before its picture still gets one
-- The siren of a HomeBase 3 can be triggered
-- A connection to a camera that went silent is noticed and rebuilt. The live view no longer stays stuck on it
-- With debug logging on, every Eufy notification shows up in the log, so a missing detection can be traced
+- **Battery cameras and doorbells are recognized when you add them.** camera.ui then sets up a battery camera so it can sleep. Needs camera.ui 2.4.0.
+- **The live view freezes less often.** Frames that arrive late, in a burst or cut between two network packets no longer stop the picture until the next full frame. After a frame is lost for good, the picture holds until the next full frame instead of showing grey smears.
+- **A camera that went silent is noticed and reconnected**, so the live view no longer stays stuck on it.
+- **Closing the live view of a camera without a HomeBase stops its stream.** The camera kept streaming, and a light that follows the stream stayed on.
+- **Cameras behind a HomeBase 3 keep streaming.** After a while every new live view failed until the connection was rebuilt.
+- **Detections and doorbell presses come in more reliably.** The plugin signs up for Eufy notifications the way the Eufy app does. When that fails at startup it tries again, until now nothing came in until a restart. With debug logging on, every Eufy notification shows up in the log.
+- **Cameras behind a HomeBase 2 show the picture of their latest event**, also when the event arrives before its picture.
+- **Cameras behind a HomeBase S1 Pro (T9000) show a live view**, one camera at a time and without sound, on a 64-bit system. The siren of a SoloCam S220 behind it can be triggered.
+- **More devices work as in the Eufy app.** The siren of a HomeBase 3 can be triggered, the Video Doorbell Dual T8213 rings as a doorbell, the PoE S4 behind its recorder shows up as a camera, and a Video Doorbell Dual behind a HomeBase shows the split picture instead of a small inset.
+- **An Indoor Cam Pan & Tilt behind a HomeBase can be turned on and off**, and its switch shows the right state. Before, "on" could turn it off.
+- **The plugin stays logged in to Eufy when it moves to a worker and back**, instead of asking for a new verification code.
+- **Some cameras no longer log the same warning about their motion sensitivity every ten minutes.**
+- Bump camera.ui engine and SDK
 
 ## [2.0.4]
 

@@ -1,3 +1,7 @@
+## [1.3.1]
+
+- Bump camera.ui engine and SDK
+
 ## [1.3.0]
 
 **Needs camera.ui 2.3.0.** Pick this plugin for each camera as Person Re-ID, to find people whose face is not visible, and as Segmentation, to outline what you click: camera settings, Plugins, Detections. The plugin downloads the models on the first start.

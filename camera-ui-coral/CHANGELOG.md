@@ -1,3 +1,7 @@
+## [1.3.1]
+
+- Bump camera.ui engine and SDK
+
 ## [1.3.0]
 
 **Needs camera.ui 2.3.0.**

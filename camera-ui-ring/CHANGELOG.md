@@ -1,6 +1,7 @@
 ## [1.2.7]
 
-- **Battery cameras and doorbells are recognized when you add them.** camera.ui then sets up a battery camera so it can sleep. Needs camera.ui 2.3.1.
+- **Battery cameras and doorbells are recognized when you add them.** camera.ui then sets up a battery camera so it can sleep. Needs camera.ui 2.4.0.
+- Bump camera.ui engine and SDK
 
 ## [1.2.6]
 
