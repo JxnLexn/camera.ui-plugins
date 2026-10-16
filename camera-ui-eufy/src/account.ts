@@ -3,10 +3,11 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { getCountryCode } from './utils.js';
+import { errorMessage, getCountryCode } from './utils.js';
 
-import type { LoggerService } from '@camera.ui/sdk';
-import type { Device, EufyDevice, Logger, LoginResult } from '@mega-yfue/eufy-sdk';
+import type { DeviceStorage, LoggerService } from '@camera.ui/sdk';
+import type { Device, EufyDevice, Logger, LoginResult, PersistedSession, SessionStore } from '@mega-yfue/eufy-sdk';
+import type { StorageValues, StoredSession } from './types.js';
 
 export interface AccountCredentials {
   email: string;
@@ -19,20 +20,22 @@ export class EufyAccount {
 
   private readonly devices = new Map<string, Device>();
   private readonly loading = new Map<string, Promise<Device>>();
-  private readonly sessionStore: FileSessionStore;
+  private readonly sessionStore: ConfigSessionStore;
   private readonly fcmStore: FileFcmStore;
 
   constructor(
     public readonly credentials: AccountCredentials,
     storagePath: string,
+    storage: DeviceStorage<StorageValues>,
     logger: LoggerService,
     debug: boolean,
     ffmpegPath?: string,
   ) {
-    const dir = join(storagePath, 'eufy', hash(credentials.email.toLowerCase()).slice(0, 12));
+    const id = hash(credentials.email.toLowerCase()).slice(0, 12);
+    const dir = join(storagePath, 'eufy', id);
     mkdirSync(dir, { recursive: true });
 
-    this.sessionStore = new FileSessionStore(join(dir, 'session.json'));
+    this.sessionStore = new ConfigSessionStore(storage, id, new FileSessionStore(join(dir, 'session.json')), logger);
     this.fcmStore = new FileFcmStore(join(dir, 'push.json'));
 
     this.client = new EufyMega({
@@ -107,6 +110,39 @@ export class EufyAccount {
       this.sessionStore.clear();
       this.fcmStore.clear();
     }
+  }
+}
+
+class ConfigSessionStore implements SessionStore {
+  constructor(
+    private storage: DeviceStorage<StorageValues>,
+    private account: string,
+    private legacy: FileSessionStore,
+    private logger: LoggerService,
+  ) {}
+
+  public load(): PersistedSession | null {
+    const saved = this.storage.values.session;
+    if (saved?.account === this.account) return saved.session;
+
+    const legacy = this.legacy.load();
+    if (legacy) {
+      this.save(legacy);
+      this.legacy.clear();
+    }
+    return legacy;
+  }
+
+  public save(session: PersistedSession): void {
+    this.write({ account: this.account, session });
+  }
+
+  public clear(): void {
+    this.write(undefined);
+  }
+
+  private write(value: StoredSession | undefined): void {
+    this.storage.setInternalValue('session', value).catch((error) => this.logger.warn(`Eufy: could not save the session: ${errorMessage(error)}`));
   }
 }
 

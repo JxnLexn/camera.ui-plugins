@@ -1,4 +1,4 @@
-import type { EufyMega } from '@mega-yfue/eufy-sdk';
+import type { EufyMega, PersistedSession } from '@mega-yfue/eufy-sdk';
 
 export type StreamMode = 'p2p' | 'rtsp';
 
@@ -16,6 +16,12 @@ export interface StorageValues {
   captcha?: string;
   captchaCode?: string;
   twoFactorCode?: string;
+  session?: StoredSession;
+}
+
+export interface StoredSession {
+  account: string;
+  session: PersistedSession;
 }
 
 export interface EufyContext {

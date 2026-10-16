@@ -277,7 +277,7 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
   }
 
   private createAccount(credentials: AccountCredentials): EufyAccount {
-    return new EufyAccount(credentials, this.api.storagePath, this.logger, this.storage.values.debug ?? false, this.ffmpegPath);
+    return new EufyAccount(credentials, this.api.storagePath, this.storage, this.logger, this.storage.values.debug ?? false, this.ffmpegPath);
   }
 
   private async activate(account: EufyAccount): Promise<void> {
@@ -529,7 +529,7 @@ export default class Eufy extends BasePlugin<StorageValues> implements Discovery
 
   private async saveConfig(values: StorageValues): Promise<void> {
     const { captcha: _captcha, captchaCode: _captchaCode, twoFactorCode: _twoFactorCode, ...config } = values;
-    this.storage.values = config;
+    this.storage.values = { ...config, session: this.storage.values.session };
     await this.storage.save();
   }
 }

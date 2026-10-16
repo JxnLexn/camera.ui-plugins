@@ -202,14 +202,14 @@ export class EufyLiveSource implements Source {
     if (!this.keyframeSeen) {
       if (!frame.keyframe) return;
       this.keyframeSeen = true;
-      if (frame.timestamp !== undefined) this.stationClock.start(frame.timestamp);
+      if (frame.sourceTimestamp !== undefined) this.stationClock.start(frame.sourceTimestamp);
     }
     if (this.videoCodec && frame.codec !== this.videoCodec) {
       this.logger.warn?.(`${this.device.name} switched from ${this.videoCodec} to ${frame.codec}, restarting the stream`);
       this.endInputs();
       return;
     }
-    this.videoTimeline.push(frame.timestamp);
+    this.videoTimeline.push(frame.sourceTimestamp);
     if (!video.write(frame.data)) this.consumer?.pause();
   }
 
@@ -222,10 +222,10 @@ export class EufyLiveSource implements Source {
     if (frame.codec !== this.audioCodec) return;
 
     if (this.eldTranscoder) {
-      this.audioTimeline.push(frame.timestamp);
+      this.audioTimeline.push(frame.sourceTimestamp);
       this.eldTranscoder.push(stripAdts(frame.data));
     } else if (this.audio && !this.audio.writableEnded) {
-      this.audioTimeline.push(frame.timestamp);
+      this.audioTimeline.push(frame.sourceTimestamp);
       this.audio.write(frame.data);
     }
   }
