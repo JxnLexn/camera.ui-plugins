@@ -1,4 +1,13 @@
 {
+  "@camera.ui/camera-ui-apple-llm": {
+    "displayName": "Apple LLM",
+    "category": "ai-model",
+    "featured": false,
+    "tagline": "Apple's on-device foundation model as an assistant model for camera.ui, with tools and pictures.",
+    "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-apple-llm/logo.png",
+    "screenshots": [],
+    "protocolLevel": 2
+  },
   "@camera.ui/camera-ui-audio-yamnet": {
     "displayName": "YAMNet Audio Detection",
     "category": "detection",
@@ -6,7 +15,7 @@
     "tagline": "Audio event detection for camera.ui.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-audio-yamnet/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-coral": {
     "displayName": "Coral",
@@ -15,7 +24,7 @@
     "tagline": "Coral Edge TPU (TFLite) detection backend for camera.ui.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-coral/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-coreml": {
     "displayName": "CoreML",
@@ -24,16 +33,16 @@
     "tagline": "Apple CoreML detection backend for camera.ui.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-coreml/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-eufy": {
     "displayName": "Eufy",
     "category": "camera-source",
     "featured": false,
-    "tagline": "Integrates Eufy security cameras and doorbells into camera.ui, with device discovery, live streaming, and motion, object, battery and doorbell events.",
+    "tagline": "Integrates Eufy cameras, doorbells, HomeBases and sensors into camera.ui, with device discovery, live streaming, two-way audio, detection events, camera controls and adoptable Eufy sensors.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-eufy/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-hailo": {
     "displayName": "Hailo",
@@ -42,7 +51,7 @@
     "tagline": "Hailo Edge AI (HailoRT) detection backend for camera.ui.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-hailo/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-homeassistant": {
     "displayName": "Home Assistant",
@@ -51,7 +60,7 @@
     "tagline": "Imports Home Assistant devices into camera.ui: motion, contacts, doorbells and more become detection triggers, locks, lights and alarms become controls.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-homeassistant/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-homekit": {
     "displayName": "HomeKit",
@@ -60,7 +69,7 @@
     "tagline": "Exposes camera.ui cameras and sensors to Apple HomeKit: cameras stream and record via HomeKit Secure Video, sensors appear as accessories in the Home app.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-homekit/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-ncnn": {
     "displayName": "NCNN",
@@ -69,7 +78,7 @@
     "tagline": "NCNN detection backend for camera.ui.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-ncnn/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-nvr": {
     "displayName": "NVR",
@@ -78,7 +87,7 @@
     "tagline": "Manage and store video recordings from your cameras.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/external-logos/camera-ui-nvr.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-onnx": {
     "displayName": "ONNX",
@@ -87,7 +96,7 @@
     "tagline": "ONNX Runtime detection backend for camera.ui.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-onnx/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-onnx-legacy": {
     "displayName": "ONNX Legacy",
@@ -96,7 +105,7 @@
     "tagline": "ONNX backend on the CUDA 12 runtime, for NVIDIA GPUs before the GTX 1650.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-onnx-legacy/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-onvif": {
     "displayName": "Onvif",
@@ -105,7 +114,7 @@
     "tagline": "ONVIF integration for camera.ui.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-onvif/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-opencl": {
     "displayName": "OpenCL",
@@ -114,7 +123,7 @@
     "tagline": "GPU-accelerated motion detection for camera.ui using OpenCL.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-opencl/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-opencv": {
     "displayName": "OpenCV",
@@ -123,7 +132,7 @@
     "tagline": "Motion detection for camera.ui using OpenCV.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-opencv/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-openvino": {
     "displayName": "OpenVino",
@@ -132,7 +141,7 @@
     "tagline": "OpenVINO detection backend for camera.ui, optimized for Intel hardware.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-openvino/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-openvino-legacy": {
     "displayName": "OpenVino Legacy",
@@ -141,7 +150,7 @@
     "tagline": "OpenVINO backend with the older 2024.6 runtime, for Intel GPUs up to 10th gen Core on Windows.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-openvino-legacy/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-pamdiff": {
     "displayName": "Pam Diff",
@@ -150,7 +159,7 @@
     "tagline": "Pixel-based motion detection for camera.ui using the pam-diff algorithm on ffmpeg PAM frames.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-pamdiff/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-reolink": {
     "displayName": "Reolink",
@@ -159,7 +168,7 @@
     "tagline": "Integrates Reolink cameras and doorbells into camera.ui via the native Baichuan protocol, with device discovery, live streaming, two-way audio, and motion, AI object, battery and doorbell events.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-reolink/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-ring": {
     "displayName": "Ring",
@@ -168,7 +177,7 @@
     "tagline": "Integrates Ring cameras and doorbells into camera.ui, with device discovery, live streaming, and motion, battery, light, siren and doorbell events.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-ring/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-rust-motion": {
     "displayName": "Rust Motion",
@@ -177,7 +186,7 @@
     "tagline": "Native motion detection for camera.ui, powered by a Rust detector for low CPU usage.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-rust-motion/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-smtp": {
     "displayName": "SMTP",
@@ -186,7 +195,7 @@
     "tagline": "Motion detection for camera.ui via SMTP.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-smtp/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-tuya": {
     "displayName": "Tuya",
@@ -195,7 +204,7 @@
     "tagline": "Integrates Tuya / Smart Life cameras into camera.ui, with device discovery and live streaming.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-tuya/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-wasm-motion": {
     "displayName": "WASM Motion",
@@ -204,7 +213,7 @@
     "tagline": "Motion detection for camera.ui running as a WebAssembly module.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-wasm-motion/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   },
   "@camera.ui/camera-ui-wyze": {
     "displayName": "Wyze",
@@ -213,6 +222,6 @@
     "tagline": "Integrates Wyze cameras into camera.ui, with device discovery, live streaming and motion events.",
     "logo": "https://raw.githubusercontent.com/cameraui/plugins/main/camera-ui-wyze/logo.png",
     "screenshots": [],
-    "protocolLevel": 1
+    "protocolLevel": 2
   }
 }
