@@ -689,7 +689,7 @@ func (p *ReolinkPlugin) expandNVR(camera sdk.DiscoveredCamera, nvrEntry discover
 	}
 
 	p.Logger.Log(fmt.Sprintf("NVR %s expanded into %d channel camera(s)", camera.Name, len(entries)))
-	return fmt.Errorf("NVR detected: %d channel camera(s) were added to the discovered list — adopt each channel individually (credentials are prefilled)", len(entries))
+	return fmt.Errorf("NVR detected: %d channel camera(s) were added to the discovered list, adopt each channel individually (credentials are prefilled)", len(entries))
 }
 
 func (p *ReolinkPlugin) registerTeleLenses(baseID string, baseEntry discoveredEntry, username string, password string, channelNum int) {
@@ -822,7 +822,7 @@ func (p *ReolinkPlugin) onAddManual(value any) *sdk.FormSubmitResponse {
 		return &sdk.FormSubmitResponse{Toast: &sdk.ToastMessage{Type: "error", Message: "Failed to add camera."}}
 	}
 
-	return &sdk.FormSubmitResponse{Toast: &sdk.ToastMessage{Type: "success", Message: name + " added — adopt it from the discovered cameras list."}}
+	return &sdk.FormSubmitResponse{Toast: &sdk.ToastMessage{Type: "success", Message: name + " added. Adopt it from the discovered cameras list."}}
 }
 
 func discoveryID(device baichuan.DiscoveredDevice) string {

@@ -289,7 +289,7 @@ func (s *reolinkPTZ) SetVelocity(value sdk.PTZDirection) {
 	if err := cam.PTZ(ctx, command, speed); err != nil {
 		var statusErr *baichuan.StatusError
 		if errors.As(err, &statusErr) && s.unsupported.CompareAndSwap(false, true) {
-			s.cam.logger.Warn("Camera rejected PTZ command (not a PTZ model?) — disabling PTZ control. Re-adopt the camera without PTZ to remove the sensor.")
+			s.cam.logger.Warn("Camera rejected PTZ command (not a PTZ model?), disabling PTZ control. Re-adopt the camera without PTZ to remove the sensor.")
 			return
 		}
 		if !s.unsupported.Load() {
