@@ -2,6 +2,12 @@
 
 - **Battery cameras can sleep.** HomeKit Secure Video only keeps a camera connected for the seconds before an event when hot mode is on for its main stream. Without hot mode, as plugins set it for battery cameras, a recording opens the stream when the event starts.
 - **The picture in Home follows the camera's snapshot setting.** It used to fetch a new one on every request, which woke battery cameras. While an event runs or the doorbell rings, it still fetches a fresh one.
+- **Pairings move with the plugin.** They are kept in the plugin settings on the main server instead of files on the machine the plugin runs on, so cameras and the bridge stay paired when the plugin moves to a worker or back. Existing pairings are taken over on the first start.
+- **Every bridge has its own identity.** Two camera.ui servers in the same network showed up in Home as the same bridge. A bridge that is not paired yet gets an identity of its own on the first start, paired bridges keep theirs.
+- **A copy of the server gets new pairings.** After a backup is restored as a copy, the bridge and the cameras get new pairing codes there, so they no longer answer for the original. Add them to Home again on the copy. A move keeps the pairings.
+- **The pairing code in the settings works.** A camera or bridge that had no saved code showed a different one on every start, and the code in the settings did not match the one Home expected. Scanning the QR code worked, typing the code did not.
+- **HomeKit Secure Video records again after the camera stream got stuck.** The plugin restarts a recording stream that sends nothing for about 25 seconds.
+- Bump camera.ui engine and SDK
 
 ## [1.3.3]
 

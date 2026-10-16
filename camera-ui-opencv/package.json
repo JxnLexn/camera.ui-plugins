@@ -23,14 +23,14 @@
     "@camera.ui/cli": "^0.0.116",
     "@camera.ui/sdk": "^1.4.1",
     "cross-env": "^10.1.0",
-    "updates": "^19.2.0"
+    "updates": "^19.2.1"
   },
   "bugs": {
     "url": "https://github.com/cameraui/plugins/issues"
   },
   "engines": {
-    "camera.ui": ">=2.3.0",
-    "node": ">=22.0.0"
+    "camera.ui": ">=2.4.0",
+    "node": ">=24.5.0"
   },
   "os": [],
   "cpu": [],
