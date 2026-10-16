@@ -6,7 +6,7 @@ const config: CameraUiBuildOptions = {
   input: ['src/main.py'],
   mode: mode === 'development' ? 'development' : 'production',
   external: [],
-  additionalFiles: [],
+  additionalFiles: ['helper/bin/libcoremlhelper.dylib'],
   language: 'python',
 };
 

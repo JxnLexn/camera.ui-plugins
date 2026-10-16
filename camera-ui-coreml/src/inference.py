@@ -12,10 +12,13 @@ from camera_ui_ml import (
     InputSpec,
     NDArray,
     Outputs,
+    resize_rgb,
     to_pil,
     to_tensor,
 )
 from coremltools.proto import FeatureTypes_pb2 as ft
+
+from native import NativeModel
 
 _ARRAY_DTYPES: dict[int, Any] = {
     ft.ArrayFeatureType.FLOAT32: np.float32,
@@ -28,6 +31,7 @@ _ARRAY_DTYPES: dict[int, Any] = {
 class CoreMlBackend(InferenceBackend):
     def __init__(self, model: Any, spec: Any, device: str = "unknown", workers: int = 2) -> None:
         self._model = model
+        self._native = model if isinstance(model, NativeModel) else None
         self._device = device
         inputs = spec.description.input
 
@@ -57,6 +61,8 @@ class CoreMlBackend(InferenceBackend):
         return self._device
 
     def adapt(self, image: NDArray, spec: InputSpec) -> Sequence[Any]:
+        if self._image_input and self._native is not None:
+            return [np.ascontiguousarray(resize_rgb(image, spec.width, spec.height))]
         if self._image_input:
             return [to_pil(image, spec.width, spec.height)]
         return [to_tensor(image, spec)]
@@ -66,6 +72,8 @@ class CoreMlBackend(InferenceBackend):
 
     def close(self) -> None:
         self._executor.shutdown(wait=False)
+        if self._native is not None:
+            self._native.close()
 
     def _run(self, inputs: list[Any]) -> Outputs:
         feed: dict[str, Any] = {}
@@ -73,6 +81,8 @@ class CoreMlBackend(InferenceBackend):
             if dtype is not None and hasattr(value, "astype"):
                 value = value.astype(dtype, copy=False)
             feed[name] = value
+        if self._native is not None:
+            return self._native.predict(list(feed.values()))
         out = self._model.predict(feed)
         return [np.asarray(out[name]) for name in self._output_names]
 

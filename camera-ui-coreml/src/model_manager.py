@@ -12,6 +12,7 @@ from camera_ui_sdk import LoggerService
 
 from defaults import MODEL_BASE_URL, MODEL_LFS_URL, model_version
 from inference import CoreMlBackend
+from native import NativeModel, helper_error, load_native
 
 _COMPUTE_UNITS: dict[str, Any] = {
     "ALL": ct.ComputeUnit.ALL,
@@ -37,6 +38,8 @@ class CoreMlModelManager(BaseModelManager):
     ) -> None:
         super().__init__(storage_path, logger, model_version)
         self._get_compute_units = get_compute_units
+        if (error := helper_error()) is not None:
+            self.logger.log(f"CoreML helper not loaded ({error}), using coremltools")
 
     def model_files(self, model_name: str) -> Mapping[str, tuple[str, str]]:
         pkg = f"{model_name}.mlpackage"
@@ -76,6 +79,9 @@ class CoreMlModelManager(BaseModelManager):
             f"{model_name}.mlmodelc",
         )
         if os.path.isdir(compiled_path):
+            native = self._load_native(model_name, compiled_path, compute_units, spec)
+            if native is not None:
+                return native, spec
             try:
                 return ct.models.CompiledMLModel(compiled_path, compute_units=compute_units), spec
             except Exception:
@@ -89,4 +95,15 @@ class CoreMlModelManager(BaseModelManager):
             os.rename(tmp_path, compiled_path)
         except Exception as error:
             self.logger.log(f"Could not persist compiled model ({error})")
-        return model, spec
+            return model, spec
+        native = self._load_native(model_name, compiled_path, compute_units, spec)
+        return (model if native is None else native), spec
+
+    def _load_native(
+        self, model_name: str, compiled_path: str, compute_units: Any, spec: Any
+    ) -> NativeModel | None:
+        try:
+            return load_native(compiled_path, compute_units.name, spec)
+        except RuntimeError as error:
+            self.logger.log(f"CoreML helper could not load {model_name} ({error}), using coremltools")
+            return None

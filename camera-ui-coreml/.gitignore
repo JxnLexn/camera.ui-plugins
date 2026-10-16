@@ -35,3 +35,6 @@ requirements-lock.txt
 *.sw?
 .venv
 .mypy_cache
+
+# built by scripts/build-helper.mjs
+helper/bin
