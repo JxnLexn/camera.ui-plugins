@@ -27,13 +27,16 @@ const CATEGORY_OVERRIDES: Record<string, Category> = {
   'camera-ui-coreml': 'ai-model',
   'camera-ui-eufy': 'camera-source',
   'camera-ui-hailo': 'ai-model',
+  'camera-ui-homeassistant': 'automation',
   'camera-ui-homekit': 'automation',
   'camera-ui-ncnn': 'ai-model',
   'camera-ui-onnx': 'ai-model',
+  'camera-ui-onnx-legacy': 'ai-model',
   'camera-ui-onvif': 'camera-source',
   'camera-ui-opencl': 'ai-model',
   'camera-ui-opencv': 'ai-model',
   'camera-ui-openvino': 'ai-model',
+  'camera-ui-openvino-legacy': 'ai-model',
   'camera-ui-pamdiff': 'detection',
   'camera-ui-reolink': 'camera-source',
   'camera-ui-ring': 'camera-source',
@@ -44,11 +47,17 @@ const CATEGORY_OVERRIDES: Record<string, Category> = {
   'camera-ui-wyze': 'camera-source',
 };
 
-const FEATURED = new Set<string>(['camera-ui-homekit', 'camera-ui-rust-motion', 'camera-ui-coreml', 'camera-ui-openvino', 'camera-ui-onnx']);
+const FEATURED = new Set<string>(['camera-ui-homeassistant', 'camera-ui-homekit', 'camera-ui-rust-motion', 'camera-ui-coreml', 'camera-ui-openvino', 'camera-ui-onnx']);
 
-// Official plugins published to npm but sourced from a separate repo, so unavailable
-// when this script runs. Their metadata is maintained here by hand; protocolLevel is
-// only the fallback until the registry serves a stamped release.
+// store text instead of the first sentence of the package description
+const TAGLINE_OVERRIDES: Record<string, string> = {
+  'camera-ui-homeassistant':
+    'Imports Home Assistant devices into camera.ui: motion, contacts, doorbells and more become detection triggers, locks, lights and alarms become controls.',
+  'camera-ui-onnx-legacy': 'ONNX backend on the CUDA 12 runtime, for NVIDIA GPUs before the GTX 1650.',
+  'camera-ui-openvino-legacy': 'OpenVINO backend with the older 2024.6 runtime, for Intel GPUs up to 10th gen Core on Windows.',
+};
+
+// official plugins built in another repo; their protocol level comes from the registry like every other entry
 const EXTERNAL_PLUGINS: Record<string, CatalogEntry> = {
   '@camera.ui/camera-ui-nvr': {
     displayName: 'NVR',
@@ -57,7 +66,6 @@ const EXTERNAL_PLUGINS: Record<string, CatalogEntry> = {
     tagline: 'Manage and store video recordings from your cameras.',
     logo: `${RAW_BASE}/external-logos/camera-ui-nvr.png`,
     screenshots: [],
-    protocolLevel: 1,
   },
 };
 
@@ -105,39 +113,29 @@ function collectScreenshots(folder: string, dir: string): string[] {
     .map((file) => `${RAW_BASE}/${folder}/screenshots/${file}`);
 }
 
-function readProtocolLevel(dir: string): number | undefined {
-  const bundlePkgPath = resolve(dir, 'bundle', 'package.json');
-  if (!existsSync(bundlePkgPath)) return undefined;
-  const level = JSON.parse(readFileSync(bundlePkgPath, 'utf-8')).cameraui?.protocolLevel;
-  return typeof level === 'number' ? level : undefined;
-}
+// null when the package is not on npm; a registry that cannot be reached throws, so no half catalog gets written
+async function fetchPublished(name: string): Promise<{ version: string; protocolLevel?: number } | null> {
+  const response = await fetch(`https://registry.npmjs.org/${name.replace('/', '%2F')}/latest`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`npm registry answered ${response.status} for ${name}`);
 
-async function fetchExternalProtocolLevel(name: string): Promise<number | undefined> {
-  try {
-    const response = await fetch(`https://registry.npmjs.org/${name.replace('/', '%2F')}/latest`);
-    if (!response.ok) return undefined;
-    const pkg = (await response.json()) as { cameraui?: { protocolLevel?: unknown } };
-    const level = pkg.cameraui?.protocolLevel;
-    return typeof level === 'number' ? level : undefined;
-  } catch {
-    return undefined;
-  }
+  const pkg = (await response.json()) as { version: string; cameraui?: { protocolLevel?: unknown } };
+  const level = pkg.cameraui?.protocolLevel;
+  return { version: pkg.version, ...(typeof level === 'number' ? { protocolLevel: level } : {}) };
 }
 
 function buildEntry(folder: string): { name: string; entry: CatalogEntry } {
   const dir = resolve(ROOT, folder);
   const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf-8'));
   const name: string = pkg.name;
-  const protocolLevel = readProtocolLevel(dir);
 
   const entry: CatalogEntry = {
     ...(pkg.displayName ? { displayName: pkg.displayName as string } : {}),
     category: CATEGORY_OVERRIDES[folder] ?? deriveCategory(dir),
     featured: FEATURED.has(folder),
-    tagline: firstSentence(pkg.description),
+    tagline: TAGLINE_OVERRIDES[folder] ?? firstSentence(pkg.description),
     ...(existsSync(resolve(dir, 'logo.png')) ? { logo: `${RAW_BASE}/${folder}/logo.png` } : {}),
     screenshots: collectScreenshots(folder, dir),
-    ...(protocolLevel !== undefined ? { protocolLevel } : {}),
   };
 
   return { name, entry };
@@ -150,15 +148,23 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const catalog: Record<string, CatalogEntry> = {};
+  const candidates: Record<string, CatalogEntry> = { ...EXTERNAL_PLUGINS };
   for (const folder of folders) {
     const { name, entry } = buildEntry(folder);
-    catalog[name] = entry;
+    candidates[name] = entry;
   }
 
-  for (const [name, entry] of Object.entries(EXTERNAL_PLUGINS)) {
-    const registryLevel = await fetchExternalProtocolLevel(name);
-    catalog[name] = registryLevel !== undefined ? { ...entry, protocolLevel: registryLevel } : entry;
+  const catalog: Record<string, CatalogEntry> = {};
+  const published = await Promise.all(Object.keys(candidates).map(async (name) => [name, await fetchPublished(name)] as const));
+  for (const [name, release] of published) {
+    if (!release) {
+      console.warn(chalk.yellow(`  skipped ${name}: not published on npm`));
+      continue;
+    }
+    if (release.protocolLevel === undefined) {
+      console.warn(chalk.yellow(`  ${name}@${release.version} carries no protocol level`));
+    }
+    catalog[name] = { ...candidates[name], ...(release.protocolLevel !== undefined ? { protocolLevel: release.protocolLevel } : {}) };
   }
 
   const sorted: Record<string, CatalogEntry> = {};

@@ -18,6 +18,7 @@ export const GO = {
 
 export const RUNNERS = {
   'camera-ui-apple-llm': 'xcode-27',
+  'camera-ui-coreml': 'xcode-27',
 };
 
 // CI/publish python; plugins absent here use the default 3.13
