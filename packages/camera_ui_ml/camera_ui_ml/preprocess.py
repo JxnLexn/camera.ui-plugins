@@ -12,7 +12,7 @@ from .geometry import Box
 NDArray = np.ndarray[Any, Any]
 
 
-def frame_to_rgb(data: bytes, width: int, height: int, fmt: str = "rgb") -> NDArray:
+def frame_to_rgb(data: bytes | memoryview, width: int, height: int, fmt: str = "rgb") -> NDArray:
     pixels = np.frombuffer(data, dtype=np.uint8)
     if fmt == "rgb":
         return pixels.reshape((height, width, 3))
@@ -43,24 +43,26 @@ def to_pil(rgb: NDArray, width: int | None = None, height: int | None = None) ->
 def to_tensor(rgb: NDArray, spec: InputSpec) -> NDArray:
     resized = resize_rgb(rgb, spec.width, spec.height)
 
-    arr: NDArray
-    if spec.normalize == "unit":
-        arr = resized.astype(np.float32) / 255.0
-    elif spec.normalize == "facenet":
-        arr = (resized.astype(np.float32) - 127.5) / 128.0
-    elif spec.normalize == "arcface":
-        arr = (resized.astype(np.float32) - 127.5) / 127.5
-    else:
-        arr = resized.astype(np.uint8 if spec.dtype == "uint8" else np.float32)
-
+    src: NDArray
     if spec.layout == "nchw":
-        arr = arr.transpose(2, 0, 1)
+        src = resized.transpose(2, 0, 1)
         if spec.channels == "bgr":
-            arr = arr[::-1]
-    elif spec.channels == "bgr":
-        arr = arr[..., ::-1]
+            src = src[::-1]
+    else:
+        src = resized[..., ::-1] if spec.channels == "bgr" else resized
 
-    return np.ascontiguousarray(np.expand_dims(arr, axis=0))
+    if spec.normalize == "none":
+        out = np.empty((1, *src.shape), dtype=np.uint8 if spec.dtype == "uint8" else np.float32)
+        np.copyto(out[0], src, casting="unsafe")
+        return out
+
+    out = np.empty((1, *src.shape), dtype=np.float32)
+    if spec.normalize == "unit":
+        np.divide(src, np.float32(255.0), out=out[0], dtype=np.float32)
+    else:
+        np.subtract(src, np.float32(127.5), out=out[0], dtype=np.float32)
+        np.divide(out, np.float32(128.0 if spec.normalize == "facenet" else 127.5), out=out)
+    return out
 
 
 def crop_rgb(rgb: NDArray, box: Box) -> NDArray:

@@ -60,7 +60,7 @@ class PlateOcr(BaseDetector):
         return self._decode(await self.backend.run(image, self._spec))
 
     async def recognize_from_crop(
-        self, frame_data: bytes, width: int, height: int, box: Box
+        self, frame_data: bytes | memoryview, width: int, height: int, box: Box
     ) -> OcrResult | None:
         if not self._ready():
             return None

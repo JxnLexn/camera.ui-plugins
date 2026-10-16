@@ -129,9 +129,8 @@ async def _detect_plates_one(
         return {"detected": False, "detections": []}
 
     width, height = frame["width"], frame["height"]
-    data = bytes(frame["data"])
     ocr_results = await asyncio.gather(
-        *(ocr.recognize_from_crop(data, width, height, box) for _cid, _conf, box in raw)
+        *(ocr.recognize_from_crop(frame["data"], width, height, box) for _cid, _conf, box in raw)
     )
     detections: list[LicensePlateDetection] = []
     for (_cid, conf, box), result in zip(raw, ocr_results, strict=False):
@@ -219,7 +218,7 @@ async def embed_faces(
     space: str,
 ) -> list[FaceEmbeddingResult]:
     crops = [
-        frame_to_rgb(bytes(frame["data"]), frame["width"], frame["height"], frame.get("format", "rgb"))
+        frame_to_rgb(frame["data"], frame["width"], frame["height"], frame.get("format", "rgb"))
         for frame in frames
     ]
     return await _embed_crops(landmarker, embedder, crops, space)
@@ -277,7 +276,7 @@ async def embed_persons(
     space: str,
 ) -> list[PersonEmbeddingResult]:
     crops = [
-        frame_to_rgb(bytes(frame["data"]), frame["width"], frame["height"], frame.get("format", "rgb"))
+        frame_to_rgb(frame["data"], frame["width"], frame["height"], frame.get("format", "rgb"))
         for frame in frames
     ]
     return [{"embedding": await embedder.embed(crop), "embeddingModel": space} for crop in crops]
@@ -301,7 +300,7 @@ async def embed_person_images(
 async def segment_objects(segmenter: Segmenter, frames: list[SegmentationFrame]) -> list[SegmentationResult]:
     results: list[SegmentationResult] = []
     for frame in frames:
-        rgb = frame_to_rgb(bytes(frame["data"]), frame["width"], frame["height"], frame.get("format", "rgb"))
+        rgb = frame_to_rgb(frame["data"], frame["width"], frame["height"], frame.get("format", "rgb"))
         results.append(_segmentation(await segmenter.segment(rgb, frame["box"])))
     return results
 
