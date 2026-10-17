@@ -24,8 +24,8 @@
     "smtp-server": "^3.19.23"
   },
   "devDependencies": {
-    "@camera.ui/cli": "^0.0.116",
-    "@camera.ui/sdk": "^1.4.1",
+    "@camera.ui/cli": "^0.0.117",
+    "@camera.ui/sdk": "^1.4.2",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/mailparser": "^3.9.0",
     "@types/node": "26.6.5",
