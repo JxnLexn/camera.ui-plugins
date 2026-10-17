@@ -659,6 +659,7 @@ class NCNNPlugin(
         obj = list(self.object_detectors)
         fdet = list(self.face_detectors)
         femb = list(self.face_embedders)
+        lmk = list(self.face_landmarkers)
         pemb = list(self.person_embedders)
         seg = list(self.segmenters)
         pdet = list(self.plate_detectors)
@@ -671,6 +672,7 @@ class NCNNPlugin(
             *(self.get_object_detector(n) for n in obj),
             *(self.get_face_detector(n) for n in fdet),
             *(self.get_face_embedder(n) for n in femb),
+            *(self.get_face_landmarker() for _ in lmk),
             *(self.get_person_embedder() for _ in pemb),
             *(self.get_segmenter(n) for n in seg),
             *(self.get_plate_detector(n) for n in pdet),
@@ -698,6 +700,7 @@ class NCNNPlugin(
             *(d.close() for d in self.face_detectors.values()),
             *(d.close() for d in self.plate_detectors.values()),
             *(e.close() for e in self.face_embedders.values()),
+            *(m.close() for m in self.face_landmarkers.values()),
             *(e.close() for e in self.person_embedders.values()),
             *(s.close() for s in self.segmenters.values()),
             *(o.close() for o in self.ocr_models.values()),
@@ -705,6 +708,7 @@ class NCNNPlugin(
         self.object_detectors.clear()
         self.face_detectors.clear()
         self.face_embedders.clear()
+        self.face_landmarkers.clear()
         self.person_embedders.clear()
         self.segmenters.clear()
         self.plate_detectors.clear()

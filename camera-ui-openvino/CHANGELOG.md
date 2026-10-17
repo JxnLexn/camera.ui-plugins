@@ -1,5 +1,6 @@
 ## [1.3.1]
 
+- **Changing the Device or downloading the models again also reloads the face landmark model.** It kept running on the old setting until the plugin restarted.
 - Bump camera.ui engine and SDK
 
 ## [1.3.0]
