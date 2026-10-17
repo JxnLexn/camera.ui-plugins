@@ -6,12 +6,15 @@
 - **Closing the live view of a camera without a HomeBase stops its stream.** The camera kept streaming, and a light that follows the stream stayed on.
 - **Cameras behind a HomeBase 3 keep streaming.** After a while every new live view failed until the connection was rebuilt.
 - **Detections and doorbell presses come in more reliably.** The plugin signs up for Eufy notifications the way the Eufy app does. When that fails at startup it tries again, until now nothing came in until a restart. With debug logging on, every Eufy notification shows up in the log.
-- **Cameras behind a HomeBase 2 show the picture of their latest event**, also when the event arrives before its picture.
+- **Cameras behind a HomeBase 2 show the picture of their latest event**, also when the event arrives before its picture. Some pictures that stayed empty show up now too.
 - **Cameras behind a HomeBase S1 Pro (T9000) show a live view**, one camera at a time and without sound, on a 64-bit system. The siren of a SoloCam S220 behind it can be triggered.
-- **More devices work as in the Eufy app.** The siren of a HomeBase 3 can be triggered, the Video Doorbell Dual T8213 rings as a doorbell, the PoE S4 behind its recorder shows up as a camera, and a Video Doorbell Dual behind a HomeBase shows the split picture instead of a small inset.
-- **An Indoor Cam Pan & Tilt behind a HomeBase can be turned on and off**, and its switch shows the right state. Before, "on" could turn it off.
+- **More devices work as in the Eufy app.** The siren of a HomeBase 3 can be triggered, the Video Doorbell Dual T8213 rings as a doorbell, the PoE S4 behind its recorder shows up as a camera, and a Video Doorbell Dual behind a HomeBase shows the split picture instead of a small inset. The Video Doorbell T8210C rings as well, the Baby Monitor E21 can pan and tilt, and the spotlight of an eufyCam E330 Pro can be switched.
+- **An Indoor Cam Pan & Tilt behind a HomeBase can be turned on and off**, and its switch shows the right state. Before, "on" could turn it off. An Indoor Cam S350 behind a HomeBase can be turned on and off too.
 - **The plugin stays logged in to Eufy when it moves to a worker and back**, instead of asking for a new verification code.
 - **Some cameras no longer log the same warning about their motion sensitivity every ten minutes.**
+- **Stopping an alarm in the Eufy app ends it in camera.ui right away.** The guard mode kept showing the alarm for up to 15 minutes.
+- **No new verification code every 30 minutes.** When Eufy asked for a verification code, the plugin tried to log in again every 30 minutes, and Eufy sent a new code each time.
+- **The SoloCam S220 no longer shows pan and tilt controls** it does not have.
 - Bump camera.ui engine and SDK
 
 ## [2.0.4]

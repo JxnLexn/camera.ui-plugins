@@ -296,7 +296,7 @@ export class EufySecuritySystem extends SecuritySystem implements BindableSensor
     if (event.phase === 'delayed') return;
 
     const alarmType = (event as { alarm_type?: unknown }).alarm_type;
-    if (typeof alarmType === 'number' && ALARM_STOP_TYPES.has(alarmType)) {
+    if (event.phase === 'stopped' || (typeof alarmType === 'number' && ALARM_STOP_TYPES.has(alarmType))) {
       this.endAlarm();
       return;
     }
