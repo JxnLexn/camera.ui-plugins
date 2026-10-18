@@ -202,7 +202,7 @@ export class EufyLiveSource implements Source {
     if (!this.keyframeSeen) {
       if (!frame.keyframe) return;
       this.keyframeSeen = true;
-      if (frame.sourceTimestamp !== undefined) this.stationClock.start(frame.sourceTimestamp);
+      if (frame.sourceTimestamp !== undefined) this.stationClock.start(frame.sourceTimestamp, frame.sourceClockRate);
     }
     if (this.videoCodec && frame.codec !== this.videoCodec) {
       this.logger.warn?.(`${this.device.name} switched from ${this.videoCodec} to ${frame.codec}, restarting the stream`);

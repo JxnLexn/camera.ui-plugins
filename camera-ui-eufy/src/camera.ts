@@ -171,7 +171,7 @@ export class EufyCamera {
   }
 
   private get streamMode(): StreamMode {
-    if (!this.device?.rtsp?.()) return 'p2p';
+    if (!this.device || !canPublishRtsp(this.device)) return 'p2p';
     return this.storage?.values.streamMode ?? 'p2p';
   }
 
@@ -311,7 +311,7 @@ export class EufyCamera {
 
   private async withdrawRtsp(): Promise<void> {
     try {
-      await this.device?.rtsp?.()?.withdraw();
+      await this.device?.rtsp?.()?.withdraw?.();
     } catch (error) {
       this.logger.warn(`Could not withdraw the RTSP stream: ${errorMessage(error)}`);
     }
@@ -341,7 +341,7 @@ export class EufyCamera {
   }
 
   private createStorage(device: Device): DeviceStorage<EufyCameraStorage> {
-    if (!device.rtsp?.()) return this.cameraDevice.createStorage<EufyCameraStorage>([]);
+    if (!canPublishRtsp(device)) return this.cameraDevice.createStorage<EufyCameraStorage>([]);
 
     return this.cameraDevice.createStorage<EufyCameraStorage>([
       {
@@ -358,6 +358,10 @@ export class EufyCamera {
       },
     ]);
   }
+}
+
+function canPublishRtsp(device: Device): boolean {
+  return device.rtsp?.()?.publish !== undefined;
 }
 
 function toArrayBuffer(data: Buffer): ArrayBuffer {

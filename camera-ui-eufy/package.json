@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@mega-yfue/eufy-sdk": "file:../externals/eufy-sdk",
-    "@seydx/rtsp": "^2.0.0",
+    "@seydx/rtsp": "^2.1.1",
     "node-datachannel": "^0.33.4"
   },
   "devDependencies": {

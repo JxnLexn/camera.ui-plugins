@@ -1,4 +1,5 @@
-const ORIGIN_MARGIN_MS = 1000;
+const ORIGIN_MARGIN_S = 1;
+const DEFAULT_CLOCK_RATE = 1000;
 const AUDIO_RESYNC_S = 0.25;
 const RESAMPLED_RESYNC_S = 1;
 const MAX_PENDING_STAMPS = 300;
@@ -9,6 +10,7 @@ export type TimelineMode = 'frames' | 'samples' | 'resampled';
 
 export class StationClock {
   private origin?: number;
+  private rate = DEFAULT_CLOCK_RATE;
   private base = 0;
   private lastRaw?: number;
 
@@ -16,13 +18,15 @@ export class StationClock {
     return this.origin !== undefined;
   }
 
-  public start(raw: number): void {
-    this.origin ??= this.unwrap(raw) - ORIGIN_MARGIN_MS;
+  public start(raw: number, rate = DEFAULT_CLOCK_RATE): void {
+    if (this.origin !== undefined) return;
+    this.rate = rate;
+    this.origin = this.unwrap(raw) - ORIGIN_MARGIN_S * rate;
   }
 
   public seconds(raw: number): number | undefined {
     if (this.origin === undefined) return undefined;
-    return (this.unwrap(raw) - this.origin) / 1000;
+    return (this.unwrap(raw) - this.origin) / this.rate;
   }
 
   private unwrap(raw: number): number {

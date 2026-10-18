@@ -1,13 +1,14 @@
-## [2.0.5]
+## [2.1.0]
 
 - **Battery cameras and doorbells are recognized when you add them.** camera.ui then sets up a battery camera so it can sleep. Needs camera.ui 2.4.0.
 - **The live view freezes less often.** Frames that arrive late, in a burst or cut between two network packets no longer stop the picture until the next full frame. After a frame is lost for good, the picture holds until the next full frame instead of showing grey smears.
-- **A camera that went silent is noticed and reconnected**, so the live view no longer stays stuck on it.
+- **A camera that went silent is noticed and reconnected**, so the live view no longer stays stuck on it. A camera on a power supply that accepts a live view but sends no picture gets a new connection after a few seconds instead of 20.
 - **Closing the live view of a camera without a HomeBase stops its stream.** The camera kept streaming, and a light that follows the stream stayed on.
 - **Cameras behind a HomeBase 3 keep streaming.** After a while every new live view failed until the connection was rebuilt.
 - **Detections and doorbell presses come in more reliably.** The plugin signs up for Eufy notifications the way the Eufy app does. When that fails at startup it tries again, until now nothing came in until a restart. With debug logging on, every Eufy notification shows up in the log.
 - **Cameras behind a HomeBase 2 show the picture of their latest event**, also when the event arrives before its picture. Some pictures that stayed empty show up now too.
-- **Cameras behind a HomeBase S1 Pro (T9000) show a live view**, one camera at a time and without sound, on a 64-bit system. The siren of a SoloCam S220 behind it can be triggered.
+- **Cameras behind a HomeBase S1 Pro (T9000) show a live view**, one camera at a time and without sound, on a 64-bit system. The siren of more cameras behind it can be triggered, among them the SoloCam S220 and L20, eufyCam 2C, Video Doorbell Dual and Indoor Cam. These cameras no longer offer RTSP, which never worked there.
+- **The Video Doorbell C31 shows a live view**, without sound and on a 64-bit system.
 - **More devices work as in the Eufy app.** The siren of a HomeBase 3 can be triggered, the Video Doorbell Dual T8213 rings as a doorbell, the PoE S4 behind its recorder shows up as a camera, and a Video Doorbell Dual behind a HomeBase shows the split picture instead of a small inset. The Video Doorbell T8210C rings as well, the Baby Monitor E21 can pan and tilt, and the spotlight of an eufyCam E330 Pro can be switched.
 - **An Indoor Cam Pan & Tilt behind a HomeBase can be turned on and off**, and its switch shows the right state. Before, "on" could turn it off. An Indoor Cam S350 behind a HomeBase can be turned on and off too.
 - **The plugin stays logged in to Eufy when it moves to a worker and back**, instead of asking for a new verification code.
@@ -15,8 +16,10 @@
 - **Stopping an alarm in the Eufy app ends it in camera.ui right away.** The guard mode kept showing the alarm for up to 15 minutes.
 - **No new verification code every 30 minutes.** When Eufy asked for a verification code, the plugin tried to log in again every 30 minutes, and Eufy sent a new code each time.
 - **The SoloCam S220 no longer shows pan and tilt controls** it does not have.
+- **The Smoke Alarm E10 shows up as a smoke sensor** instead of a camera.
+- **The guard mode of an Indoor Cam T8410C can be changed.** Every change failed before.
+- **Changing the country in the plugin settings logs in again.** The plugin kept the session of the old country, a verification code may be asked for.
 - Bump camera.ui engine and SDK
-- Bump @seydx/rtsp to 2.0
 
 ## [2.0.4]
 
