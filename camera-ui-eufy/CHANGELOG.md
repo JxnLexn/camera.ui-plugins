@@ -16,6 +16,7 @@
 - **No new verification code every 30 minutes.** When Eufy asked for a verification code, the plugin tried to log in again every 30 minutes, and Eufy sent a new code each time.
 - **The SoloCam S220 no longer shows pan and tilt controls** it does not have.
 - Bump camera.ui engine and SDK
+- Bump @seydx/rtsp to 2.0
 
 ## [2.0.4]
 
