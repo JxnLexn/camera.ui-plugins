@@ -1,22 +1,19 @@
 import { BackchannelTranscoder } from '@seydx/rtsp';
 
 import type { Device, TalkbackHandle } from '@mega-yfue/eufy-sdk';
-import type { BackchannelAdvertise, Logger } from '@seydx/rtsp';
+import type { BackchannelFormat, Logger } from '@seydx/rtsp';
 
-export const TALKBACK_ADVERTISE: BackchannelAdvertise = { codec: 'pcm_alaw', payloadType: 8, clockRate: 8000, channels: 1 };
+export const TALKBACK_ADVERTISE: BackchannelFormat = { codec: 'pcm_alaw', payloadType: 8, clockRate: 8000, channels: 1 };
 
 // the device only plays AAC-LC 16 kHz mono in ADTS, frames above ~32 kbps get dropped
 const TALKBACK_TARGET = { codec: 'aac', sampleRate: 16000, channels: 1, format: 'adts', bitRate: 32000 } as const;
-const IDLE_STOP_MS = 2000;
 const MAX_PENDING_CHUNKS = 64;
 
 export class EufyTalkback {
   private transcoder?: BackchannelTranscoder;
-  private starting?: Promise<void>;
   private handle?: TalkbackHandle;
   private opening?: Promise<void>;
   private pending: Buffer[] = [];
-  private idleTimer?: NodeJS.Timeout;
 
   constructor(
     private readonly device: Device,
@@ -24,9 +21,6 @@ export class EufyTalkback {
   ) {}
 
   public push(rtp: Buffer): void {
-    clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.stop(), IDLE_STOP_MS);
-
     if (!this.transcoder) {
       this.transcoder = new BackchannelTranscoder({
         from: { ...TALKBACK_ADVERTISE },
@@ -35,25 +29,25 @@ export class EufyTalkback {
         onError: (error) => this.logger.error?.('Talkback transcoding failed:', error),
         logger: this.logger,
       });
-      this.starting = this.transcoder.start();
+      try {
+        this.transcoder.start();
+      } catch (error) {
+        // stays unstarted until talkback goes idle, a retry per packet would only repeat the error
+        this.logger.error?.('Talkback transcoder did not start:', error);
+      }
     }
-
-    const transcoder = this.transcoder;
-    this.starting?.then(() => transcoder.push(rtp)).catch((error) => this.logger.error?.('Talkback transcoder did not start:', error));
+    this.transcoder.push(rtp);
   }
 
   public async stop(): Promise<void> {
-    clearTimeout(this.idleTimer);
-    this.idleTimer = undefined;
     this.pending = [];
 
     const transcoder = this.transcoder;
     const handle = this.handle;
     this.transcoder = undefined;
-    this.starting = undefined;
     this.handle = undefined;
 
-    await transcoder?.close().catch(() => undefined);
+    transcoder?.close();
     await handle?.stop().catch(() => undefined);
   }
 

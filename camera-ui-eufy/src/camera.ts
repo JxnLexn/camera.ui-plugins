@@ -1,5 +1,5 @@
 import { DoorbellTrigger } from '@camera.ui/sdk';
-import { Relay } from '@seydx/rtsp';
+import { Relay, RtspServerSink } from '@seydx/rtsp';
 
 import {
   EufyAudioSensor,
@@ -18,7 +18,7 @@ import { errorMessage, isBatteryPowered } from './utils.js';
 
 import type { CameraDevice, DeviceStorage, LoggerService, Sensor, SnapshotInterface, StreamingInterface } from '@camera.ui/sdk';
 import type { AnyDeviceEvent, Device } from '@mega-yfue/eufy-sdk';
-import type { Logger, RtspServerSink } from '@seydx/rtsp';
+import type { Logger } from '@seydx/rtsp';
 import type { BindableSensor } from './sensors.js';
 import type { EufyCameraStorage, EufyContext, StreamMode } from './types.js';
 
@@ -270,12 +270,14 @@ export class EufyCamera {
     this.talkback = talkback;
 
     try {
-      const server = await relay.serveRtsp({
+      const server = await new RtspServerSink(relay, {
         path: 'live',
-        backchannel: device.camera?.()?.talkback ? { ...TALKBACK_ADVERTISE } : false,
+        backchannel: device.camera?.()?.talkback ? { advertise: { ...TALKBACK_ADVERTISE } } : false,
         sdpTimeout: 30_000,
-      });
+        logger,
+      }).listen();
       server.on('backchannel', (rtp) => talkback.push(rtp));
+      server.on('backchannel:stop', () => talkback.stop());
       if (context.debug) this.logger.debug('P2P relay started');
       return server;
     } catch (error) {

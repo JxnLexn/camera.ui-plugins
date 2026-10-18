@@ -84,7 +84,7 @@ export class EufyLiveSource implements Source {
       if (probe.config.codec === 'av1') throw new Error(`${this.device.name} streams AV1, which the relay cannot serve`);
 
       const inputs: MultiSourceInput[] = [{ input: video, format: probe.config.codec === 'h265' ? 'hevc' : 'h264', options: { framerate: '15' } }];
-      const audioInput = await this.createAudioInput(probe.audio);
+      const audioInput = this.createAudioInput(probe.audio);
       if (this.closed) throw closedError();
       if (audioInput) inputs.push(audioInput);
       this.flushAudio();
@@ -127,7 +127,7 @@ export class EufyLiveSource implements Source {
     try {
       await multi?.close();
     } finally {
-      await transcoder?.close().catch(() => undefined);
+      transcoder?.close();
     }
   }
 
@@ -163,7 +163,7 @@ export class EufyLiveSource implements Source {
     });
   }
 
-  private async createAudioInput(codec: LiveAudioFrame['codec'] | undefined): Promise<MultiSourceInput | undefined> {
+  private createAudioInput(codec: LiveAudioFrame['codec'] | undefined): MultiSourceInput | undefined {
     if (codec === 'aac-lc') {
       this.audioCodec = codec;
       this.audio = new PassThrough();
@@ -187,7 +187,7 @@ export class EufyLiveSource implements Source {
       });
       this.eldTranscoder = transcoder;
       this.audioTimeline = new TrackTimeline(this.stationClock, 'resampled', FALLBACK_AUDIO_STEP_S);
-      await transcoder.start();
+      transcoder.start();
       return { input: transcoder.stream, format: 'aac' };
     }
 
@@ -264,7 +264,7 @@ export class EufyLiveSource implements Source {
     if (this.video && !this.video.writableEnded) this.video.end();
     if (this.audio && !this.audio.writableEnded) this.audio.end();
     // the transcoder output is its own stream and only ends on close
-    void this.eldTranscoder?.close().catch(() => undefined);
+    this.eldTranscoder?.close();
   }
 }
 
