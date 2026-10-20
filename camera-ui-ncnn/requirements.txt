@@ -1,4 +1,4 @@
-ncnn==1.0.20260526
+ncnn==1.0.20261020
 camera-ui-sdk==1.4.2
 camera-ui-ml==1.2.20
 numpy==2.4.6
