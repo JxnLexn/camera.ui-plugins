@@ -68,7 +68,7 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
       },
     };
 
-    // secure video streams Opus on the fixed 48 kHz clock of RFC 7587, not the legacy negotiated rate
+    // secure video uses the fixed 48 kHz Opus clock of RFC 7587, not the negotiated rate
     const session = new StreamingSession(this.cameraAccessory, this.cameraDevice, prepareStreamRequest, Date.now(), this.config.codec, 'fixed');
     await session.prepare();
     this.sessions.set(request.sessionIdentifier, session);
@@ -95,9 +95,7 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
     const tier = this.config.videoTiers.find((candidate) => candidate.identifier === request.videoTier) ?? this.config.videoTiers[0];
     const bitrate = Math.round(this.config.audioTier.targetAverageBitrate / 1000);
 
-    // iOS filters the incoming stream by the ssrc from the Setup Endpoints response, so keep the
-    // ssrc prepared there instead of the one the controller sends in the RTP Streaming Control START
-
+    // iOS filters by the ssrc from Setup Endpoints, not the one in the START request
     const startStreamRequest: StartStreamRequest = {
       sessionID: request.sessionIdentifier,
       type: StreamRequestTypes.START,
@@ -152,8 +150,8 @@ export class MultiTierRtpDelegate implements MultiTierRTPStreamingDelegate {
   }
 }
 
-// the tier reports the Opus transmission rate, which is always 48 kHz, the capture runs at 16 or 24 kHz
 function captureSampleRate(sampleRate: StreamTierAudioSampleRate): AudioStreamingSamplerate {
+  // the tier gives the Opus wire rate (always 48 kHz), the capture runs at 16 or 24 kHz
   switch (sampleRate) {
     case StreamTierAudioSampleRate.KHZ_16:
       return AudioStreamingSamplerate.KHZ_16;

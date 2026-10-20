@@ -129,7 +129,6 @@ export class RtpSplitter {
 
   public async send(message: Buffer, sendTo: SocketTarget): Promise<void> {
     if (this.closed) {
-      // If we send a message on a closed socket, it will throw an ERR_SOCKET_DGRAM_NOT_RUNNING error
       return;
     }
 

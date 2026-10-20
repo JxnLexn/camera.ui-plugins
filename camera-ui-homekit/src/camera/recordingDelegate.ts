@@ -5,11 +5,14 @@ import { RecordingSession } from './recordingSession.js';
 import type { CameraDevice, LoggerService } from '@camera.ui/sdk';
 import type { Accessory, CameraRecordingConfiguration, CameraRecordingDelegate, RecordingPacket } from '../hap.js';
 import type { CameraAccessory } from './accessory.js';
-import type { ClipPart, ClipStreamOptions } from './recordingSession.js';
+import type { ClipPart, ClipStreamOptions, RecordingAudio } from './recordingSession.js';
+
+const CLIP_PREBUFFER = 12_000; // the hub asks for clips from about 9 s before its upload command
 
 export class RecordingDelegate implements CameraRecordingDelegate {
   private readonly logPrefix = '[HKSV]';
   private readonly recordingSession: RecordingSession;
+  private readonly clipSession?: RecordingSession;
 
   private activeStreamId?: number;
   private logger: LoggerService;
@@ -18,13 +21,27 @@ export class RecordingDelegate implements CameraRecordingDelegate {
     private cameraAccessory: CameraAccessory,
     private accessory: Accessory,
     private cameraDevice: CameraDevice,
+    cmafAudio?: RecordingAudio,
   ) {
     this.logger = this.cameraDevice.logger;
-    this.recordingSession = new RecordingSession(this.cameraAccessory, this.cameraDevice, this.logger);
+    this.recordingSession = new RecordingSession(this.cameraAccessory, this.cameraDevice, this.logger, {
+      logPrefix: '[HKSV]',
+      audio: { codec: 'aac' },
+      minPrebuffer: cmafAudio?.codec === 'aac' ? CLIP_PREBUFFER : undefined,
+    });
+    // HDS recordings need AAC, so Opus clips get their own fMP4 session
+    if (cmafAudio?.codec === 'opus') {
+      this.clipSession = new RecordingSession(this.cameraAccessory, this.cameraDevice, this.logger, {
+        logPrefix: '[CMAF]',
+        audio: cmafAudio,
+        minPrebuffer: CLIP_PREBUFFER,
+      });
+    }
   }
 
   public updateRecordingActive(active: boolean): void {
     this.recordingSession.updateRecordingActive(active);
+    this.clipSession?.updateRecordingActive(active);
 
     if (!active) {
       this.accessory.getService(Service.MotionSensor)?.getCharacteristic(Characteristic.MotionDetected).updateValue(false);
@@ -33,18 +50,21 @@ export class RecordingDelegate implements CameraRecordingDelegate {
 
   public updateRecordingConfiguration(configuration?: CameraRecordingConfiguration): void {
     this.recordingSession.updateRecordingConfiguration(configuration);
+    this.clipSession?.updateRecordingConfiguration(configuration);
   }
 
   public refreshPrebuffer(): void {
     this.recordingSession.refreshPrebuffer();
+    this.clipSession?.refreshPrebuffer();
   }
 
   public resumePrebuffer(): void {
     this.recordingSession.resumePrebuffer();
+    this.clipSession?.resumePrebuffer();
   }
 
   public getClipStream(options: ClipStreamOptions): AsyncGenerator<ClipPart, void> {
-    return this.recordingSession.getClipStream(options);
+    return (this.clipSession ?? this.recordingSession).getClipStream(options);
   }
 
   public async *handleRecordingStreamRequest(streamId: number, signal?: AbortSignal): AsyncGenerator<RecordingPacket> {
@@ -111,7 +131,7 @@ export class RecordingDelegate implements CameraRecordingDelegate {
 
   public async stop(): Promise<void> {
     this.logger.debug(this.logPrefix, 'Stopping recording delegate');
-    await this.recordingSession.stop();
+    await Promise.all([this.recordingSession.stop(), this.clipSession?.stop()]);
     this.cleanup(this.activeStreamId);
   }
 

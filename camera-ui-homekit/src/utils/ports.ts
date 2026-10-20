@@ -2,7 +2,6 @@ import { pickPort } from 'pick-port';
 
 import type { Socket } from 'node:dgram';
 
-// Need to reserve ports in sequence because ffmpeg uses the next port up by default.  If it's taken, ffmpeg will error
 export async function reservePorts({
   count = 1,
   type = 'udp',
@@ -18,7 +17,7 @@ export async function reservePorts({
 
   const pickPortOptions = {
       type,
-      reserveTimeout: 15, // 15 seconds is max setup time for HomeKit streams, so the port should be in use by then
+      reserveTimeout: 15, // seconds, HomeKit stream setup takes at most 15 s
     },
     port = await pickPort(pickPortOptions),
     ports = [port],
@@ -30,6 +29,7 @@ export async function reservePorts({
       });
     };
 
+  // ffmpeg takes the next port up by default, so the ports must be consecutive
   for (let i = 1; i < count; i++) {
     try {
       const targetConsecutivePort = port + i,
@@ -41,7 +41,6 @@ export async function reservePorts({
 
       ports.push(openPort);
     } catch {
-      // can't reserve next port, bail and get another set
       return tryAgain();
     }
   }
@@ -53,7 +52,6 @@ export function bindToPort(socket: Socket, address = '127.0.0.1'): Promise<numbe
   return new Promise<number>((resolve, reject) => {
     socket.on('error', reject);
 
-    // 0 means select a random open port
     socket.bind(0, address, () => {
       const { port } = socket.address();
       resolve(port);

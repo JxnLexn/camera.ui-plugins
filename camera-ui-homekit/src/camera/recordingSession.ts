@@ -1,9 +1,10 @@
 import { EventEmitter } from 'node:events';
 
-import { normalizeFragmentTfdt, ntpToMilliseconds, prependProducerReferenceTime } from '../utils/fmp4.js';
+import { fragmentDuration, normalizeFragmentTfdt, ntpToMilliseconds, prependProducerReferenceTime, trackTimings } from '../utils/fmp4.js';
 
 import type { CameraDevice, Fmp4Session, Fmp4VideoInfo, LoggerService } from '@camera.ui/sdk';
 import type { CameraRecordingConfiguration } from '../hap.js';
+import type { TrackTiming } from '../utils/fmp4.js';
 import type { CameraAccessory } from './accessory.js';
 
 interface LiveConsumer {
@@ -13,24 +14,40 @@ interface LiveConsumer {
   closed?: boolean;
 }
 
+export interface RecordingAudio {
+  codec: 'aac' | 'opus';
+  bitrate?: number;
+}
+
+export interface RecordingSessionOptions {
+  logPrefix: string;
+  audio: RecordingAudio;
+  minPrebuffer?: number;
+}
+
 export interface ClipStreamOptions {
   start?: bigint;
   stop?: bigint;
   signal?: AbortSignal;
 }
 
-export type ClipPart =
-  { type: 'init'; data: Buffer; startedAt: number; videoInfo: Fmp4VideoInfo | undefined } | { type: 'fragment'; data: Buffer; duration: number; last: boolean };
+export type ClipPart = { type: 'init'; data: Buffer; videoInfo: Fmp4VideoInfo | undefined } | { type: 'fragment'; data: Buffer; duration: number; last: boolean };
+
+class FragmentTimeoutError extends Error {}
 
 export class RecordingSession extends EventEmitter {
   private static readonly maxLiveQueueFragments = 8;
 
-  private readonly logPrefix = '[HKSV]';
+  private readonly logPrefix: string;
   private readonly fragmentTimeout = 8000;
+  private readonly sessionStallTimeout = 24_000; // healthy sources go quiet for up to about 22 s
   private readonly sessionRestartDelay = 3000;
+  private readonly maxSessionRestartDelay = 60_000;
 
   private session?: Fmp4Session;
   private sessionSubscriptions: { unsubscribe(): void }[] = [];
+  private lastDeliveryAt = 0;
+  private restartAttempts = 0;
   private configuration?: CameraRecordingConfiguration;
 
   private recordingActive = false;
@@ -40,8 +57,8 @@ export class RecordingSession extends EventEmitter {
   private lifecycleRevision = 0;
 
   private prebuffer: Buffer[] = [];
-  private receivedAt = new WeakMap<Buffer, number>();
-  private prebufferMaxFragments = 2;
+  private fragmentTimes = new WeakMap<Buffer, { end: number; duration: number }>();
+  private trackTimings?: Map<number, TrackTiming>;
   private collectAbort?: AbortController;
   private restartTimeout?: NodeJS.Timeout;
 
@@ -53,8 +70,10 @@ export class RecordingSession extends EventEmitter {
     private cameraAccessory: CameraAccessory,
     private cameraDevice: CameraDevice,
     private logger: LoggerService,
+    private options: RecordingSessionOptions = { logPrefix: '[HKSV]', audio: { codec: 'aac' } },
   ) {
     super();
+    this.logPrefix = options.logPrefix;
   }
 
   public updateRecordingActive(active: boolean): void {
@@ -87,12 +106,6 @@ export class RecordingSession extends EventEmitter {
     this.configuration = configuration;
     this.logger.debug(this.logPrefix, 'Recording configuration updated:', configuration ?? 'No configuration');
 
-    if (configuration) {
-      const fragmentLength = configuration.mediaContainerConfiguration?.fragmentLength ?? 4000;
-      const prebufferLength = configuration.prebufferLength ?? 4000;
-      this.prebufferMaxFragments = Math.max(1, Math.ceil(prebufferLength / fragmentLength));
-    }
-
     if (this.recordingActive) {
       this.restartPrebuffer();
     }
@@ -105,13 +118,13 @@ export class RecordingSession extends EventEmitter {
 
     const session = await this.acquireSession();
     const tfdtOffsets = new Map<number, bigint>();
-    const buffered = [...this.prebuffer];
+    const buffered = this.hubPrebuffer();
     const consumer = this.addConsumer();
     this.hdsConsumer = consumer;
 
     try {
       this.logger.debug(this.logPrefix, 'Yielding init segment');
-      const initSegment = await this.waitForRecording(session.initSegment, signal, 'Init segment timeout');
+      const initSegment = await this.waitForRecording(session.initSegment, signal, () => new Error('Init segment timeout'));
       const sampleEntry = ['hvc1', 'hev1', 'avc1', 'avc3'].find((tag) => initSegment.includes(tag)) ?? 'unknown';
       this.logger.debug(this.logPrefix, `Init segment ${initSegment.length} bytes, sample entry ${sampleEntry}`);
       yield initSegment;
@@ -136,6 +149,7 @@ export class RecordingSession extends EventEmitter {
         return;
       }
 
+      this.checkFragmentTimeout(session, error);
       this.logger.error(this.logPrefix, 'Error in recording stream:', error);
       throw error;
     } finally {
@@ -150,40 +164,45 @@ export class RecordingSession extends EventEmitter {
   public async *getClipStream(options: ClipStreamOptions): AsyncGenerator<ClipPart, void> {
     const session = await this.acquireSession();
     const { signal } = options;
-    const fragmentLength = this.fragmentLength();
     const startMs = options.start === undefined ? 0 : ntpToMilliseconds(options.start);
     const stopMs = options.stop === undefined ? Infinity : ntpToMilliseconds(options.stop);
     const tfdtOffsets = new Map<number, bigint>();
     const buffered = this.prebuffer.filter((fragment) => this.fragmentEnd(fragment) > startMs);
     const consumer = this.addConsumer();
 
+    if (options.start !== undefined) {
+      const reach = this.prebuffer.length > 0 ? `${((Date.now() - this.fragmentStart(this.prebuffer[0])) / 1000).toFixed(1)}s` : 'nothing';
+      this.logger.debug(this.logPrefix, `Clip starts ${((Date.now() - startMs) / 1000).toFixed(1)}s back, prebuffer reaches back ${reach}`);
+    }
+
     try {
-      const initSegment = await this.waitForRecording(session.initSegment, signal, 'Init segment timeout');
-      const firstStart = (buffered.length > 0 ? this.fragmentEnd(buffered[0]) : Date.now()) - fragmentLength;
-      yield { type: 'init', data: initSegment, startedAt: Math.max(startMs, firstStart), videoInfo: session.videoInfo };
+      const initSegment = await this.waitForRecording(session.initSegment, signal, () => new Error('Init segment timeout'));
+      yield { type: 'init', data: initSegment, videoInfo: session.videoInfo };
 
       for (const fragment of buffered) {
         if (signal?.aborted) {
           return;
         }
         const last = this.fragmentEnd(fragment) >= stopMs;
-        yield { type: 'fragment', data: normalizeFragmentTfdt(fragment, tfdtOffsets), duration: fragmentLength / 1000, last };
+        yield { type: 'fragment', data: this.clipFragment(fragment, tfdtOffsets), duration: this.durationOf(fragment) / 1000, last };
         if (last) {
           return;
         }
       }
 
       for await (const box of this.liveFragments(consumer, signal)) {
-        const end = this.fragmentEnd(box);
-        if (end - fragmentLength >= stopMs) {
+        if (this.fragmentStart(box) >= stopMs) {
           return;
         }
-        const last = end >= stopMs;
-        yield { type: 'fragment', data: normalizeFragmentTfdt(box, tfdtOffsets), duration: fragmentLength / 1000, last };
+        const last = this.fragmentEnd(box) >= stopMs;
+        yield { type: 'fragment', data: this.clipFragment(box, tfdtOffsets), duration: this.durationOf(box) / 1000, last };
         if (last) {
           return;
         }
       }
+    } catch (error) {
+      this.checkFragmentTimeout(session, error);
+      throw error;
     } finally {
       this.removeConsumer(consumer);
       await this.releaseSession(session);
@@ -207,6 +226,7 @@ export class RecordingSession extends EventEmitter {
   private stopPrebuffer(): Promise<void> {
     ++this.lifecycleRevision;
     this.deferred = false;
+    this.restartAttempts = 0;
     this.clearRestart();
     this.closeConsumers();
     this.collectAbort?.abort();
@@ -322,19 +342,25 @@ export class RecordingSession extends EventEmitter {
     });
 
     this.session = session;
+    this.lastDeliveryAt = Date.now();
     this.sessionSubscriptions = [
+      session.onStarted.subscribe(() => {
+        this.lastDeliveryAt = Date.now();
+      }),
       session.onError.subscribe((error) => {
         this.logger.warn(this.logPrefix, 'FMP4 session error:', error.message);
+        this.handleSessionLost(session);
       }),
       session.onEnded.subscribe(() => {
         this.logger.debug(this.logPrefix, 'FMP4 session ended');
         this.emit('session-ended');
+        this.handleSessionLost(session);
       }),
     ];
 
     await session.startStream({
       supportedVideoCodecs: this.cameraAccessory.secureVideoCodec === 'hevc' ? ['h264', 'hevc'] : ['h264'],
-      supportedAudioCodecs: ['aac'],
+      supportedAudioCodecs: [this.options.audio.codec],
       boxMode: true,
       fragDuration: (this.configuration?.mediaContainerConfiguration?.fragmentLength ?? 4000) * 1000,
       hardware: this.cameraAccessory.cameraStorage.values.useHardwareAccelerationForRecording ? 'auto' : undefined,
@@ -344,6 +370,7 @@ export class RecordingSession extends EventEmitter {
         fps: this.configuration?.videoCodec.resolution[2],
         bitrate: this.configuration?.videoCodec.parameters.bitRate ? this.configuration.videoCodec.parameters.bitRate * 1000 : undefined,
       },
+      audio: this.options.audio.bitrate ? { encoderOptions: { b: this.options.audio.bitrate } } : undefined,
     });
 
     this.logger.debug(this.logPrefix, 'FMP4 session started');
@@ -353,6 +380,14 @@ export class RecordingSession extends EventEmitter {
   private startCollector(session: Fmp4Session): void {
     const abort = new AbortController();
     this.collectAbort = abort;
+    this.trackTimings = undefined;
+    session.initSegment
+      .then((init) => {
+        if (this.session === session) {
+          this.trackTimings = trackTimings(init);
+        }
+      })
+      .catch(() => undefined);
 
     void (async () => {
       try {
@@ -366,18 +401,41 @@ export class RecordingSession extends EventEmitter {
       } finally {
         if (this.collectAbort === abort) {
           this.collectAbort = undefined;
-          await this.enqueueLifecycle(async () => {
-            if (this.session === session) {
-              await this.stopSession(session);
-              if (this.recordingActive && !this.stopped && this.keepsConnection()) {
-                this.deferred = true;
-              }
-              this.scheduleRestart();
-            }
-          });
+          await this.handleSessionLost(session);
         }
       }
     })();
+  }
+
+  private handleSessionLost(session: Fmp4Session): Promise<void> {
+    // a restart or stop since the loss replaced the session, do not kill the successor
+    const revision = this.lifecycleRevision;
+    return this.enqueueLifecycle(async () => {
+      if (revision !== this.lifecycleRevision || this.session !== session) {
+        return;
+      }
+
+      await this.stopSession(session);
+      if (this.recordingActive && !this.stopped && this.keepsConnection()) {
+        this.deferred = true;
+      }
+      this.scheduleRestart();
+    });
+  }
+
+  private checkFragmentTimeout(session: Fmp4Session, error: unknown): void {
+    if (!(error instanceof FragmentTimeoutError) || this.session !== session) {
+      return;
+    }
+
+    // one short gap times out all concurrent recordings, so judge the session's silence
+    const silentMs = Date.now() - this.lastDeliveryAt;
+    if (silentMs < this.sessionStallTimeout) {
+      return;
+    }
+
+    this.logger.warn(this.logPrefix, `FMP4 session delivered no fragments for ${Math.round(silentMs / 1000)}s, restarting it`);
+    this.handleSessionLost(session);
   }
 
   private async stopSession(expectedSession?: Fmp4Session): Promise<void> {
@@ -406,12 +464,16 @@ export class RecordingSession extends EventEmitter {
     if (this.stopped || !this.recordingActive || this.restartTimeout || !this.keepsConnection()) {
       return;
     }
+
+    const delay = Math.min(this.sessionRestartDelay * 2 ** this.restartAttempts, this.maxSessionRestartDelay);
+    this.restartAttempts++;
+    this.logger.debug(this.logPrefix, `Restarting the FMP4 session in ${delay / 1000}s`);
     this.restartTimeout = setTimeout(() => {
       this.restartTimeout = undefined;
       if (this.recordingActive && !this.stopped) {
         this.restartPrebuffer();
       }
-    }, this.sessionRestartDelay);
+    }, delay);
   }
 
   private clearRestart(): void {
@@ -427,15 +489,40 @@ export class RecordingSession extends EventEmitter {
       return normalized;
     }
 
-    return prependProducerReferenceTime(normalized, this.fragmentEnd(fragment) - this.fragmentLength());
+    return prependProducerReferenceTime(normalized, this.fragmentStart(fragment));
+  }
+
+  private clipFragment(fragment: Buffer, tfdtOffsets: Map<number, bigint>): Buffer {
+    return prependProducerReferenceTime(normalizeFragmentTfdt(fragment, tfdtOffsets), this.fragmentStart(fragment));
   }
 
   private fragmentLength(): number {
     return this.configuration?.mediaContainerConfiguration?.fragmentLength ?? 4000;
   }
 
+  private durationOf(fragment: Buffer): number {
+    return this.fragmentTimes.get(fragment)?.duration ?? this.fragmentLength();
+  }
+
   private fragmentEnd(fragment: Buffer): number {
-    return this.receivedAt.get(fragment) ?? Date.now();
+    return this.fragmentTimes.get(fragment)?.end ?? Date.now();
+  }
+
+  private fragmentStart(fragment: Buffer): number {
+    return this.fragmentEnd(fragment) - this.durationOf(fragment);
+  }
+
+  private prebufferWindow(): number {
+    return Math.max(this.configuration?.prebufferLength ?? 4000, this.options.minPrebuffer ?? 0);
+  }
+
+  private hubPrebuffer(): Buffer[] {
+    const oldest = Date.now() - (this.configuration?.prebufferLength ?? 4000);
+    let first = 0;
+    while (first < this.prebuffer.length - 1 && this.fragmentStart(this.prebuffer[first + 1]) <= oldest) {
+      first++;
+    }
+    return this.prebuffer.slice(first);
   }
 
   private async *liveFragments(consumer: LiveConsumer, signal?: AbortSignal): AsyncGenerator<Buffer, void> {
@@ -453,7 +540,7 @@ export class RecordingSession extends EventEmitter {
             consumer.resolve = resolve;
           }),
           signal,
-          'Fragment timeout',
+          () => new FragmentTimeoutError('Fragment timeout'),
         );
       }
 
@@ -490,9 +577,19 @@ export class RecordingSession extends EventEmitter {
   }
 
   private pushBox(box: Buffer): void {
-    this.receivedAt.set(box, Date.now());
+    this.lastDeliveryAt = Date.now();
+    this.restartAttempts = 0;
+    let duration: number | undefined;
+    try {
+      duration = this.trackTimings && fragmentDuration(box, this.trackTimings);
+    } catch {
+      // malformed fragment
+    }
+    this.fragmentTimes.set(box, { end: this.lastDeliveryAt, duration: duration ?? this.fragmentLength() });
+
     this.prebuffer.push(box);
-    while (this.prebuffer.length > this.prebufferMaxFragments) {
+    const oldest = this.lastDeliveryAt - this.prebufferWindow();
+    while (this.prebuffer.length > 1 && this.fragmentStart(this.prebuffer[1]) <= oldest) {
       this.prebuffer.shift();
     }
 
@@ -510,7 +607,7 @@ export class RecordingSession extends EventEmitter {
     }
   }
 
-  private async waitForRecording<T>(promise: Promise<T>, signal: AbortSignal | undefined, errorMessage: string): Promise<T> {
+  private async waitForRecording<T>(promise: Promise<T>, signal: AbortSignal | undefined, timeoutError: () => Error): Promise<T> {
     if (signal?.aborted) {
       throw new Error('Recording stream aborted');
     }
@@ -518,7 +615,7 @@ export class RecordingSession extends EventEmitter {
     let timeoutId: NodeJS.Timeout | undefined;
     let abortHandler: (() => void) | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error(errorMessage)), this.fragmentTimeout);
+      timeoutId = setTimeout(() => reject(timeoutError()), this.fragmentTimeout);
     });
     const aborted = new Promise<never>((_, reject) => {
       if (signal) {

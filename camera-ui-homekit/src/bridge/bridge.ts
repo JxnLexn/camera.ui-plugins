@@ -1,10 +1,12 @@
-import { AccessoryEventTypes, Bridge, Categories, Characteristic, Service, uuid } from '../hap.js';
+import { randomBytes } from 'node:crypto';
+
+import { Accessory, AccessoryEventTypes, AccessoryInfo, Bridge, Categories, Characteristic, Service, uuid } from '../hap.js';
 import * as mac from '../utils/mac.js';
-import { filterBindAddresses } from '../utils/utils.js';
+import { filterBindAddresses, followInstance } from '../utils/utils.js';
 import { buildSensorAccessory } from './sensorAccessory.js';
 
 import type { DeviceStorage, LoggerService, PluginAPI, SensorLike } from '@camera.ui/sdk';
-import type { Accessory, MacAddress, MDNSAdvertiser, PublishInfo } from '../hap.js';
+import type { MacAddress, MDNSAdvertiser, PublishInfo } from '../hap.js';
 import type HomeKit from '../index.js';
 import type { PluginStorageValues } from '../types.js';
 import type { BridgedSensorAccessory } from './sensorAccessory.js';
@@ -43,7 +45,8 @@ export class SensorBridge {
     return this.published ? (this.bridge?.setupURI() ?? '') : '';
   }
 
-  public async start(): Promise<void> {
+  public async start(instanceId: string | undefined): Promise<void> {
+    await this.settleIdentity(instanceId);
     this.started = true;
     await this.publishBridge();
   }
@@ -119,6 +122,29 @@ export class SensorBridge {
           this.publishedExternalAccessories.delete(advertiseAddress!);
         }
       }
+    }
+  }
+
+  private async settleIdentity(instanceId: string | undefined): Promise<void> {
+    await followInstance(this.storage, instanceId, async () => {
+      await this.renewIdentity(true);
+      this.logger.attention('camera.ui runs on a copy of another server, so the bridge has a new identity. Pair it again in the Home app.');
+    });
+
+    if (!this.storage.values.bridgeRepublishId && !AccessoryInfo.load(generateBridgeAddress(''))?.paired()) {
+      await this.renewIdentity(false);
+    }
+
+    if (!this.storage.values.bridgePin) {
+      await this.storage.setValue('bridgePin', mac.randomPinCode());
+    }
+  }
+
+  private async renewIdentity(newPin: boolean): Promise<void> {
+    Accessory.cleanupAccessoryData(generateBridgeAddress(this.storage.values.bridgeRepublishId));
+    await this.storage.setValue('bridgeRepublishId', randomBytes(8).toString('hex'));
+    if (newPin) {
+      await this.storage.setValue('bridgePin', mac.randomPinCode());
     }
   }
 
@@ -215,8 +241,7 @@ export class SensorBridge {
 
   private setupBridge(): void {
     const republishId = this.storage.values.bridgeRepublishId;
-    // no dot in the name: it becomes the mDNS instance name, and ciao splits it
-    // into DNS labels there, which makes the bridge undiscoverable
+    // no dot in the name, ciao splits the mDNS name at dots and the bridge becomes undiscoverable
     const bridge = new Bridge('camera ui Bridge', uuid.generate(`${republishId}-cameraui-bridge`));
 
     const accessoryInformation = bridge.getService(Service.AccessoryInformation);

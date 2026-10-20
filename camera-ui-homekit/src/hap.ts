@@ -10,6 +10,8 @@ export * from '@homebridge/hap-nodejs/dist/lib/Characteristic.js';
 
 export * from '@homebridge/hap-nodejs/dist/lib/camera/index.js';
 
+export * from '@homebridge/hap-nodejs/dist/lib/model/AccessoryInfo.js';
+
 export * from '@homebridge/hap-nodejs/dist/lib/model/ControllerStorage.js';
 
 export * from '@homebridge/hap-nodejs/dist/lib/controller/CameraController.js';

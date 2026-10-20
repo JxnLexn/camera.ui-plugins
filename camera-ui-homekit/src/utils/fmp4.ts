@@ -1,4 +1,3 @@
-// Track Fragment Decode Time offsets per recording: track_ID → first tfdt seen.
 export type TfdtOffsets = Map<number, bigint>;
 
 export function normalizeFragmentTfdt(fragment: Buffer, offsets: TfdtOffsets): Buffer {
@@ -47,6 +46,96 @@ export function normalizeFragmentTfdt(fragment: Buffer, offsets: TfdtOffsets): B
   return out;
 }
 
+export interface TrackTiming {
+  timescale: number;
+  defaultSampleDuration: number;
+}
+
+export function trackTimings(init: Buffer): Map<number, TrackTiming> {
+  const timescales = new Map<number, number>();
+  const defaults = new Map<number, number>();
+
+  eachBox(init, 0, init.length, (type, _boxStart, contentStart, boxEnd) => {
+    if (type !== 'moov') return;
+
+    eachBox(init, contentStart, boxEnd, (moovType, _moovStart, moovContent, moovEnd) => {
+      if (moovType === 'trak') {
+        let trackId: number | undefined;
+        let timescale: number | undefined;
+        eachBox(init, moovContent, moovEnd, (trakType, _trakStart, trakContent, trakEnd) => {
+          if (trakType === 'tkhd') {
+            trackId = init.readUInt32BE(trakContent + (init.readUInt8(trakContent) === 1 ? 20 : 12));
+          } else if (trakType === 'mdia') {
+            eachBox(init, trakContent, trakEnd, (mdiaType, _mdiaStart, mdiaContent) => {
+              if (mdiaType === 'mdhd') {
+                timescale = init.readUInt32BE(mdiaContent + (init.readUInt8(mdiaContent) === 1 ? 20 : 12));
+              }
+            });
+          }
+        });
+        if (trackId !== undefined && timescale) {
+          timescales.set(trackId, timescale);
+        }
+      } else if (moovType === 'mvex') {
+        eachBox(init, moovContent, moovEnd, (mvexType, _mvexStart, mvexContent) => {
+          if (mvexType === 'trex') {
+            defaults.set(init.readUInt32BE(mvexContent + 4), init.readUInt32BE(mvexContent + 12));
+          }
+        });
+      }
+    });
+  });
+
+  return new Map([...timescales].map(([trackId, timescale]) => [trackId, { timescale, defaultSampleDuration: defaults.get(trackId) ?? 0 }]));
+}
+
+export function fragmentDuration(fragment: Buffer, timings: Map<number, TrackTiming>): number | undefined {
+  let longest: number | undefined;
+  let missing = false;
+
+  eachBox(fragment, 0, fragment.length, (type, _boxStart, contentStart, boxEnd) => {
+    if (type !== 'moof') return;
+
+    eachBox(fragment, contentStart, boxEnd, (trafType, _trafStart, trafContent, trafEnd) => {
+      if (trafType !== 'traf') return;
+
+      let timing: TrackTiming | undefined;
+      let defaultDuration = 0;
+      let ticks = 0;
+
+      eachBox(fragment, trafContent, trafEnd, (childType, _childStart, childContent) => {
+        const flags = fragment.readUInt32BE(childContent) & 0xffffff;
+        if (childType === 'tfhd') {
+          timing = timings.get(fragment.readUInt32BE(childContent + 4));
+          defaultDuration = timing?.defaultSampleDuration ?? 0;
+          if (flags & 0x08) {
+            defaultDuration = fragment.readUInt32BE(childContent + 8 + (flags & 0x01 ? 8 : 0) + (flags & 0x02 ? 4 : 0));
+          }
+        } else if (childType === 'trun') {
+          const samples = fragment.readUInt32BE(childContent + 4);
+          if (!(flags & 0x100)) {
+            ticks += samples * defaultDuration;
+            return;
+          }
+          const stride = 4 * (1 + (flags & 0x200 ? 1 : 0) + (flags & 0x400 ? 1 : 0) + (flags & 0x800 ? 1 : 0));
+          let position = childContent + 8 + (flags & 0x01 ? 4 : 0) + (flags & 0x04 ? 4 : 0);
+          for (let sample = 0; sample < samples; sample++, position += stride) {
+            ticks += fragment.readUInt32BE(position);
+          }
+        }
+      });
+
+      if (!timing) {
+        missing = true;
+        return;
+      }
+      longest = Math.max(longest ?? 0, (ticks / timing.timescale) * 1000);
+    });
+  });
+
+  return missing || !longest ? undefined : longest;
+}
+
 const NTP_EPOCH_OFFSET_SECONDS = 2_208_988_800n;
 
 export function ntpToMilliseconds(ntp: bigint): number {
@@ -55,8 +144,8 @@ export function ntpToMilliseconds(ntp: bigint): number {
   return (seconds + fraction) * 1000;
 }
 
-// tvOS 27 hubs read the fragment wall clock from prft and crash homed when it is missing
 export function prependProducerReferenceTime(fragment: Buffer, startedAt: number): Buffer {
+  // tvOS 27 hubs read the wall clock from prft and crash homed without it
   let trackId: number | undefined;
   let mediaTime: bigint | undefined;
 

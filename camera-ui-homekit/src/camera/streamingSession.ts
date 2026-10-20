@@ -136,7 +136,6 @@ export class StreamingSession {
   }
 
   private setupInactivityDetection(session: RtpSession): void {
-    // Stop the stream if no packets arrive for 5s, after an initial 15s grace period.
     let debounceTimer: NodeJS.Timeout | undefined;
     const resetDebounce = () => {
       clearTimeout(debounceTimer);
@@ -176,7 +175,7 @@ export class StreamingSession {
           address: this.prepareStreamRequest.targetAddress,
         });
       } catch {
-        //
+        // ignore
       }
     };
 
@@ -219,10 +218,6 @@ export class StreamingSession {
 
     this.setupInactivityDetection(session);
     this.setupRtcpSenderReports(session, startStreamRequest);
-
-    // if (remote) {
-    //   await PromiseTimeout(firstValueFrom(this.packetReceivedSubject), 3000, undefined, 'Failed to receive initial RTCP packet');
-    // }
 
     await this.run(session, startStreamRequest);
   }
@@ -421,7 +416,7 @@ export class StreamingSession {
           this.videoSenderState = recordRtpPacket(this.videoSenderState, rtp, 90000);
           this.videoSplitter.send(encryptedPacket, { port, address }).catch(() => {});
         } catch {
-          // Ignore deserialization errors
+          // ignore
         }
       }),
     );
@@ -437,12 +432,7 @@ export class StreamingSession {
 
     const audioSrtpSession = new SrtpSession(getSessionConfig(this.audioSrtp));
 
-    // HAP wants Opus timestamps on an RFC 3550 clock built from the negotiated
-    // sample rate, as an exception to the fixed 48 kHz clock of RFC 7587 that
-    // ffmpeg stamps. Left at 48 kHz the audio timeline runs twice as fast as
-    // real time for HomeKit, and the receiver drags the lip-synced video ever
-    // further behind. The deltas are rescaled rather than counted, so a gap
-    // in the source audio stays a gap instead of stitching the timeline shut.
+    // HAP wants Opus on the negotiated clock, not ffmpeg's 48 kHz, rescaled so source gaps stay gaps
     const rewriteTimestamps = startStreamRequest.audio.codec === AudioStreamingCodecType.OPUS && this.opusClock === 'negotiated';
     const clockScale = (startStreamRequest.audio.sample_rate * 1000) / 48000;
     let sourceBase: number | undefined;
@@ -467,7 +457,7 @@ export class StreamingSession {
           this.audioSenderState = recordRtpPacket(this.audioSenderState, rtp, this.audioClockRate);
           this.audioSplitter.send(encryptedPacket, { port, address }).catch(() => {});
         } catch {
-          // Ignore deserialization errors
+          // ignore
         }
       }),
     );
@@ -477,10 +467,10 @@ export class StreamingSession {
     this.audioSplitter.addMessageHandler(({ message, isRtpMessage }) => {
       if (isRtpMessage) {
         try {
-          // Forward encrypted SRTP packet directly - node-av will decrypt
+          // still SRTP, node-av decrypts it
           session.sendAudioPacket(message).catch(() => {});
         } catch {
-          // Ignore deserialization errors
+          // ignore
         }
       }
 
@@ -592,12 +582,11 @@ export class StreamingSession {
         } else if (packet instanceof RtcpPayloadSpecificFeedback) {
           if (packet.feedback instanceof PictureLossIndication) {
             stats.pliCount++;
-            // this.cameraLogger.debug(`Device requested a keyframe (PLI) on the ${kind} stream`);
           }
         }
       }
     } catch {
-      // Ignore deserialization errors
+      // ignore
     }
   }
 }

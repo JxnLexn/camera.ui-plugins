@@ -24,9 +24,6 @@ export function createAccessUnitAssembler(codec: SecureVideoCodec): AccessUnitAs
   return codec === 'h264' ? new H264AccessUnitAssembler() : new HevcAccessUnitAssembler();
 }
 
-// depacketizers collect the NAL units of one access unit and hand them out when the marker bit
-// closes the frame. The viewer's VideoPacketBuffer parses the decrypted frame the way VideoToolbox
-// emits it: a 4-byte big-endian length in front of every NAL unit, no start codes
 abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
   protected nalUnits: Buffer[] = [];
   protected fragment?: Buffer[];
@@ -43,6 +40,7 @@ abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
     if (!packet.header.marker) {
       return undefined;
     }
+    // the viewer parses frames as VideoToolbox emits them: 4-byte length prefixes, no start codes
     const unit: AccessUnit = {
       data: Buffer.concat(this.nalUnits.flatMap((nal) => [nalLength(nal), nal])),
       timestamp: packet.header.timestamp,
@@ -83,7 +81,6 @@ abstract class NalAccessUnitAssembler implements AccessUnitAssembler {
   }
 }
 
-// RFC 7798: single NAL, aggregation packet (48), fragmentation unit (49)
 export class HevcAccessUnitAssembler extends NalAccessUnitAssembler {
   protected depacketize(payload: Buffer): void {
     if (payload.length < 2) {
@@ -104,7 +101,6 @@ export class HevcAccessUnitAssembler extends NalAccessUnitAssembler {
   }
 }
 
-// RFC 6184: single NAL, STAP-A (24), FU-A (28)
 export class H264AccessUnitAssembler extends NalAccessUnitAssembler {
   protected depacketize(payload: Buffer): void {
     if (payload.length < 2) {
@@ -134,14 +130,13 @@ export interface SFramePacketizerOptions {
   maxPayload: number;
 }
 
-// draft-ietf-avtcore-rtp-sframe: one descriptor byte (S first fragment, E last fragment) in
-// front of each slice of the SFrame ciphertext, RTP timestamp and marker as the media frame had
 export class SFrameRtpPacketizer {
   private sequenceNumber = Math.floor(Math.random() * 0x10000);
 
   constructor(private options: SFramePacketizerOptions) {}
 
   public packetize(ciphertext: Buffer, timestamp: number, marker: boolean): RtpPacket[] {
+    // draft-ietf-avtcore-rtp-sframe: one S/E descriptor byte in front of each ciphertext slice
     const chunk = Math.max(1, this.options.maxPayload - 1);
     const packets: RtpPacket[] = [];
     for (let offset = 0; offset < ciphertext.length; offset += chunk) {
@@ -165,7 +160,6 @@ export class SFrameRtpPacketizer {
 export class SFrameRtpDepacketizer {
   private chunks: Buffer[] = [];
 
-  // returns the ciphertext once the packet carrying the end bit arrives, fragments without a start are dropped
   public push(packet: RtpPacket): Buffer | undefined {
     const descriptor = packet.payload[0];
     if (descriptor & DESCRIPTOR_START) {

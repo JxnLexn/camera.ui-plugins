@@ -5,7 +5,6 @@ import type { LoggerService, RtpSession } from '@camera.ui/sdk';
 import type { RtpPacket } from 'werift';
 import type { SecureVideoSFrame, SFrameReceiver } from './sframe.js';
 
-// packets seen per stream before the primary one is picked
 const PROBE_PACKETS = 5;
 
 interface TalkbackStream {
@@ -18,8 +17,6 @@ interface TalkbackStream {
   timestampDelta?: number;
 }
 
-// the relay sends the viewer's microphone twice (voice and a low bitrate copy) with ssrcs and payload types it never
-// announces in any SDP; the voice stream is picked by frame size and fed to the camera backchannel once decrypted
 export class Talkback {
   private readonly streams = new Map<number, TalkbackStream>();
   private primary?: number;
@@ -65,6 +62,7 @@ export class Talkback {
     if (streams.some(([, candidate]) => candidate.packets < PROBE_PACKETS)) {
       return;
     }
+    // the relay sends the mic twice, voice and a low bitrate copy, the voice stream has the bigger frames
     const [ssrc, chosen] = streams.reduce((best, entry) => (averageSize(entry[1]) > averageSize(best[1]) ? entry : best));
     this.primary = ssrc;
 

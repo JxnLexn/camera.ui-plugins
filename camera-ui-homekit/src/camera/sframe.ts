@@ -2,12 +2,6 @@ import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } f
 
 import type { SFrameKeyData } from '../hap.js';
 
-// SFrame end-to-end media protection for the WebRTC remote path (RFC 9605), applied per frame.
-// The HKSV spec only defines the key exchange (SFrame Key Data = key + kid). The viewer's
-// avconferenced negotiates Apple's own suites for the camera streams: video
-// CipherSFRAME_AESCM256AuthSHA512_80, audio CipherSFRAME_AESCM256AuthSHA512_32, AES-256-CTR with
-// HMAC-SHA512 tags; the ids are the IANA ones from draft-barnes-sframe-iana-256 and go into the
-// HKDF labels
 export enum SFrameCipherSuite {
   AES_128_CTR_HMAC_SHA256_80 = 0x0001,
   AES_128_GCM_SHA256_128 = 0x0004,
@@ -69,10 +63,8 @@ function minBytes(value: bigint): Buffer {
 
 const RTP_STREAM_LABEL = Buffer.from('SFrame 1.0 RTP Stream');
 
-// Apple's RFC cryptor (AVConference VCCryptorRFCCompliant) first turns the group key into a per-stream
-// base key, HKDF-SHA512 with the big-endian SSRC as salt and "SFrame 1.0 RTP Stream" as info, 64 bytes,
-// and only then runs the RFC 9605 derivation on that base key
 export function deriveStreamBaseKey(key: Buffer, ssrc: number): Buffer {
+  // Apple-only step before the RFC 9605 derivation: a per-stream base key from the group key
   const salt = Buffer.alloc(4);
   salt.writeUInt32BE(ssrc >>> 0);
   return Buffer.from(hkdfSync('sha512', key, salt, RTP_STREAM_LABEL, 64));
@@ -90,8 +82,8 @@ export function deriveKeys(baseKey: Buffer, kid: bigint, suite: SFrameCipherSuit
   };
 }
 
-// RFC 9605 4.3: config byte X|KKK|Y|CCC, then KID bytes (if extended), then CTR bytes (if extended)
 export function encodeHeader(kid: bigint, ctr: bigint): Buffer {
+  // RFC 9605 4.3: config byte X|KKK|Y|CCC, then the extended KID and CTR bytes
   let config = 0;
   const extra: Buffer[] = [];
 
@@ -175,8 +167,8 @@ function open(keys: DerivedKeys, suite: SFrameCipherSuite, buffer: Buffer): Buff
   return Buffer.concat([decipher.update(ct), decipher.final()]);
 }
 
-// RFC 9605 4.5.1: HMAC over aad_len || ct_len || tag_len || nonce || aad || ct, truncated to Nt
 function computeCtrTag(authKey: Buffer, aad: Buffer, ct: Buffer, iv: Buffer, params: SuiteParams): Buffer {
+  // RFC 9605 4.5.1: HMAC over aad_len || ct_len || tag_len || nonce || aad || ct, truncated to Nt
   const lengths = Buffer.alloc(24);
   lengths.writeBigUInt64BE(BigInt(aad.length), 0);
   lengths.writeBigUInt64BE(BigInt(ct.length), 8);
@@ -211,7 +203,6 @@ function decodeHeader(buffer: Buffer): { header: Buffer; kid: bigint; ctr: bigin
   return { header: buffer.subarray(0, offset), kid, ctr, offset };
 }
 
-// one sender key per WebRTC session, the viewer derives a separate cryptor per RTP stream from it
 export class SecureVideoSFrame {
   public readonly senderKey?: SFrameKeyData;
 
@@ -243,8 +234,6 @@ export class SecureVideoSFrame {
     }
   }
 
-  // talkback audio from the viewer, protected with the receive keys announced per session and derived
-  // per stream like our own sender key
   public audioReceiver(ssrc: number): SFrameReceiver {
     return new SFrameReceiver(this.enabled ? this.receiveKeys : undefined, ssrc, AUDIO_SUITE);
   }

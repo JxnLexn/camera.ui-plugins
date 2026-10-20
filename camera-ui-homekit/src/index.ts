@@ -8,6 +8,7 @@ import { HAPStorage } from './hap.js';
 import { generateBridgeAddress, SensorBridge } from './bridge/bridge.js';
 import { CameraAccessory } from './camera/accessory.js';
 import { baseAdvertiser } from './constants.js';
+import { PluginHapStorage } from './utils/hap-storage.js';
 import * as mac from './utils/mac.js';
 import { isBatteryInfo, isDoorbellTrigger, isLightControl, isMotionSensor, isSirenControl } from './utils/utils.js';
 
@@ -25,11 +26,18 @@ export default class HomeKit extends BasePlugin<PluginStorageValues> {
   private consumedSensors = new Map<string, SensorLike>();
   private sensorRoutes = new Map<string, { target: 'bridge' | 'cameras'; cameraIds: string[] }>();
   private assignmentSubscriptions = new Map<string, Disposable>();
+  private instanceIdLookup?: Promise<string | undefined>;
 
   constructor(logger: LoggerService, api: PluginAPI, storage: DeviceStorage<PluginStorageValues>) {
     super(logger, api, storage);
 
-    HAPStorage.setCustomStoragePath(resolve(this.api.storagePath, 'accessories'));
+    const legacyDir = resolve(this.api.storagePath, 'accessories');
+    // camera.ui before 2.4.0 has no synchronous writes, HAP keeps its files there
+    if (typeof storage.setInternalValueSync === 'function') {
+      HAPStorage.setCustomStorage(new PluginHapStorage(storage, legacyDir, logger));
+    } else {
+      HAPStorage.setCustomStoragePath(legacyDir);
+    }
 
     this.api.on(API_EVENT.FINISH_LAUNCHING, this.start.bind(this));
     this.api.on(API_EVENT.SHUTDOWN, this.stop.bind(this));
@@ -56,11 +64,7 @@ export default class HomeKit extends BasePlugin<PluginStorageValues> {
         store: true,
         readonly: true,
         onGet: async () => {
-          if (this.storage.values.bridgePin) {
-            return this.storage.values.bridgePin;
-          }
-
-          return mac.randomPinCode();
+          return this.storage.values.bridgePin ?? '';
         },
       },
       {
@@ -137,6 +141,11 @@ export default class HomeKit extends BasePlugin<PluginStorageValues> {
     ];
   }
 
+  public instanceId(): Promise<string | undefined> {
+    this.instanceIdLookup ??= this.fetchInstanceId();
+    return this.instanceIdLookup;
+  }
+
   public async configureCameras(cameras: CameraDevice[]): Promise<void> {
     for (const camera of cameras) {
       this.configureCamera(camera);
@@ -170,7 +179,7 @@ export default class HomeKit extends BasePlugin<PluginStorageValues> {
   }
 
   private async start(): Promise<void> {
-    await this.sensorBridge.start();
+    await this.sensorBridge.start(await this.instanceId());
   }
 
   private async stop(): Promise<void> {
@@ -180,6 +189,15 @@ export default class HomeKit extends BasePlugin<PluginStorageValues> {
     this.assignmentSubscriptions.clear();
 
     await Promise.all([this.sensorBridge.teardown(), ...Array.from(this.accessories.values()).map((accessory) => accessory.teardown())]);
+  }
+
+  private async fetchInstanceId(): Promise<string | undefined> {
+    try {
+      return (await this.api.coreManager.getInstanceId()) || undefined;
+    } catch {
+      // camera.ui before 2.4.0 has no instance id
+      return undefined;
+    }
   }
 
   private async configureCamera(cameraDevice: CameraDevice): Promise<void> {

@@ -1,5 +1,15 @@
-import type { CameraDevice, Fmp4VideoInfo, LoggerService } from '@camera.ui/sdk';
-import type { BufferActivityCommandRequest, CameraRecordingPublishingPointValue, CMAFClipRequest, CMAFError, CMAFRecordingDelegate, CMAFSegment } from '../hap.js';
+import { ntpToMilliseconds } from '../utils/fmp4.js';
+
+import type { CameraDevice, LoggerService } from '@camera.ui/sdk';
+import type {
+  BufferActivityCommandRequest,
+  BufferUploadCommandRequest,
+  CameraRecordingPublishingPointValue,
+  CMAFClipRequest,
+  CMAFError,
+  CMAFRecordingDelegate,
+  CMAFSegment,
+} from '../hap.js';
 import type { RecordingDelegate } from './recordingDelegate.js';
 
 export class CmafRecordingDelegate implements CMAFRecordingDelegate {
@@ -16,15 +26,19 @@ export class CmafRecordingDelegate implements CMAFRecordingDelegate {
   public async *streamClip(request: CMAFClipRequest): AsyncGenerator<CMAFSegment> {
     const { command } = request;
     this.logger.log(this.logPrefix, `Clip upload ${command.sessionId} started`);
-    this.logger.debug(this.logPrefix, `Upload command ${command.command}, start ${command.start ?? '-'}, stop ${command.stop ?? '-'}`);
+    this.logger.debug(this.logPrefix, `Upload command ${command.command}, start ${secondsAgo(command.start)}, stop ${secondsAgo(command.stop)}`);
 
     for await (const part of this.recordingDelegate.getClipStream({ start: command.start, stop: command.stop, signal: request.signal })) {
       if (part.type === 'init') {
-        yield { type: 'init', data: part.data, media: mediaDescription(part.videoInfo), startedAt: new Date(part.startedAt) };
+        yield { type: 'init', data: part.data };
       } else {
         yield { type: 'media', data: part.data, duration: part.duration, last: part.last };
       }
     }
+  }
+
+  public handleUploadStop(request: BufferUploadCommandRequest): void {
+    this.logger.debug(this.logPrefix, `Upload stop ${request.sessionId}, stop ${secondsAgo(request.stop)}, action ${request.stopAction ?? '-'}`);
   }
 
   public handleBufferActivity(request: BufferActivityCommandRequest): void {
@@ -49,22 +63,13 @@ export class CmafRecordingDelegate implements CMAFRecordingDelegate {
 
   public handleUploadResult(cmafSessionId: bigint, error?: CMAFError, detail?: string): void {
     if (error === undefined) {
-      this.logger.log(this.logPrefix, `Clip upload ${cmafSessionId} finished${detail ? ` (${detail})` : ''}`);
+      this.logger.log(this.logPrefix, `CMAF session ${cmafSessionId} uploaded`);
     } else {
-      this.logger.warn(this.logPrefix, `Clip upload ${cmafSessionId} failed: cmafError=${error}${detail ? ` ${detail}` : ''}`);
+      this.logger.warn(this.logPrefix, `CMAF session ${cmafSessionId} failed: cmafError=${error}${detail ? ` ${detail}` : ''}`);
     }
   }
 }
 
-function mediaDescription(info: Fmp4VideoInfo | undefined): CMAFSegment['media'] {
-  if (!info?.width || !info.height) {
-    return undefined;
-  }
-  const fps = info.fps > 0 ? info.fps : 30;
-  return {
-    codecs: info.codecString,
-    width: info.width,
-    height: info.height,
-    bitrate: Math.round(info.width * info.height * fps * 0.06),
-  };
+function secondsAgo(ntp?: bigint): string {
+  return ntp === undefined ? '-' : `${((Date.now() - ntpToMilliseconds(ntp)) / 1000).toFixed(1)}s ago`;
 }

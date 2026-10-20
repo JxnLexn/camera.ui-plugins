@@ -26,7 +26,6 @@ const UNANSWERED_TIMEOUT = 60000;
 
 const videoRtcpFeedback = [{ type: 'nack' }, { type: 'nack', parameter: 'pli' }, { type: 'ccm', parameter: 'fir' }];
 
-// the iOS 27 viewer decodes remote camera streams as HEVC only, which is why secure video is limited to HEVC cameras
 const hevcCodec = new RTCRtpCodecParameters({
   mimeType: 'video/H265',
   clockRate: 90000,
@@ -119,8 +118,7 @@ export class WebRtcSessions implements WebRTCStreamingDelegate {
     this.sessions.set(request.sessionIdentifier, session);
     session.reapTimer = setTimeout(() => this.handleEndSession(request.sessionIdentifier), UNANSWERED_TIMEOUT);
 
-    // the relay sends the viewer's microphone with ssrcs and payload types it never announces in any SDP, werift's
-    // router would drop those packets, so they are taken before routing
+    // the relay's mic packets use ssrcs and payload types no SDP announces, werift's router would drop them
     const router = (pc as any).router;
     const routeRtp = router.routeRtp;
     router.routeRtp = (packet: RtpPacket) => {
@@ -189,7 +187,7 @@ export class WebRtcSessions implements WebRTCStreamingDelegate {
     if (!session) {
       throw new Error('Unknown WebRTC session');
     }
-    // the relay renegotiates when the viewer's microphone line comes and goes, nothing to configure on our side
+    // the relay reoffers when the viewer's mic comes and goes, nothing to configure here
     this.cameraLogger.debug(`[WebRTC] ${request.sessionIdentifier.slice(0, 8)} reoffer applied`);
     await session.pc.setRemoteDescription({ type: 'offer', sdp: request.sdpOffer } as any);
     const answer = await session.pc.createAnswer();
@@ -231,8 +229,6 @@ export class WebRtcSessions implements WebRTCStreamingDelegate {
     }
   }
 
-  // main stream only: the remote stream is a native copy of the main stream in its own codec,
-  // no substream selection and no transcode
   private selectRemoteTier(): { tier: SecureVideoVideoTier; source: CameraDeviceSource } {
     return { tier: this.videoTiers[0], source: this.cameraDevice.streamSource };
   }
@@ -317,11 +313,8 @@ export class WebRtcSessions implements WebRTCStreamingDelegate {
   }
 }
 
-// werift creates its DTLS server only once ICE reports connected, but Apple's ice-lite relay
-// (setup:active) sends the ClientHello as soon as our nominating check arrives, so the first
-// flight is dropped and the handshake waits for the relay's 1s retransmit; keep the early
-// records and feed them to the server the moment it exists
 function replayEarlyDtls(pc: RTCPeerConnection, onReplay: (count: number) => void): void {
+  // werift starts DTLS only after ICE connects, Apple's relay sends the ClientHello earlier and waits 1 s to resend
   for (const dtlsTransport of pc.dtlsTransports) {
     const early: Buffer[] = [];
     const dataSubscription = dtlsTransport.iceTransport.connection.onData.subscribe((data) => {
@@ -360,11 +353,6 @@ function isDtlsRecord(data: Buffer): boolean {
 const RTP_STREAM_ID_URI = 'urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id';
 const RTP_STREAM_ID = '1';
 
-// iOS 27's willow group session rejects a video offer without an rtpStreamId
-// ("at least one rtpStreamId is required in mid:0"), werift does not emit rid/simulcast for a
-// send transceiver so the lines are injected into the video media section here. The relay
-// translates the offer into Apple's media blob, a video stream without a bitrate ends up as
-// "no valid streams" on the viewer, so the tier's bitrate goes in as b= and rid constraints
 function addVideoRtpStreamId(sdp: string, tier: SecureVideoVideoTier): string {
   const lines = sdp.split(/\r?\n/);
   const videoStart = lines.findIndex((line) => line.startsWith('m=video'));
@@ -376,6 +364,7 @@ function addVideoRtpStreamId(sdp: string, tier: SecureVideoVideoTier): string {
     videoEnd = lines.length;
   }
 
+  // without a bitrate the viewer reports "no valid streams"
   const bitrate = tier.peakBitrate * 1000;
   const connection = lines.findIndex((line, index) => index > videoStart && index < videoEnd && line.startsWith('c='));
   lines.splice(connection < 0 ? videoStart + 1 : connection + 1, 0, `b=AS:${tier.peakBitrate}`, `b=TIAS:${bitrate}`);
@@ -393,6 +382,7 @@ function addVideoRtpStreamId(sdp: string, tier: SecureVideoVideoTier): string {
     extId++;
   }
 
+  // iOS 27 rejects a video offer without an rtpStreamId and werift emits no rid for a send transceiver
   const insert = [
     `a=extmap:${extId} ${RTP_STREAM_ID_URI}`,
     `a=rid:${RTP_STREAM_ID} send max-width=${tier.width};max-height=${tier.height};max-fps=${tier.frameRate};max-br=${bitrate}`,

@@ -122,7 +122,6 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       delete this.sessions[sessionID];
       session.stop().then(() => callback(), callback);
     } else {
-      // ReconfigureStreamRequest
       callback();
     }
   }

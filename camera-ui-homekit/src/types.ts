@@ -4,6 +4,7 @@ export interface PluginStorageValues {
   bridgeAdvertiseAddress?: string;
   bridgeRepublishId: string;
   bridgeAdvertiser: string;
+  seenInstanceId?: string;
 }
 
 export interface CameraStorageValues {
@@ -15,4 +16,5 @@ export interface CameraStorageValues {
   useHardwareAccelerationForRecording: boolean;
   forceLegacyPath: boolean;
   advertiser: string;
+  seenInstanceId?: string;
 }

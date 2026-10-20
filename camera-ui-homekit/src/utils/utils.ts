@@ -6,6 +6,7 @@ import { HDSProtocolSpecificErrorReason } from '../hap.js';
 import type {
   AudioStreamInfo,
   BatteryInfoLike,
+  DeviceStorage,
   Disposable,
   DoorbellTriggerLike,
   LightControlLike,
@@ -78,6 +79,18 @@ export function filterBindAddresses(addresses: string[], logger: LoggerService):
     logger.warn(`Ignoring configured server address(es) not present on this machine: ${dropped.join(', ')} (found: ${found.join(', ') || 'none'})`);
   }
   return usable;
+}
+
+export async function followInstance(storage: DeviceStorage<{ seenInstanceId?: string }>, instanceId: string | undefined, renew: () => Promise<void>): Promise<void> {
+  const seen = storage.values.seenInstanceId;
+  if (!instanceId || seen === instanceId) {
+    return;
+  }
+
+  if (seen) {
+    await renew();
+  }
+  await storage.setInternalValue('seenInstanceId', instanceId);
 }
 
 export function generateValidAccessoryName(input = ''): string {

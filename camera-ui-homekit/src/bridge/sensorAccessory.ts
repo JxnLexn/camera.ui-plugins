@@ -288,7 +288,7 @@ const SENSOR_CONFIGS: Partial<Record<SensorType, SensorServiceConfig>> = {
       },
     ],
   },
-  // GarageState matches the HAP door-state values 1:1, no mapping needed
+  // GarageState values match the HAP door states 1:1
   [SensorType.Garage]: {
     serviceType: Service.GarageDoorOpener,
     typeName: 'garage door',
