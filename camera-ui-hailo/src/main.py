@@ -122,7 +122,6 @@ class HailoPlugin(BasePlugin, ObjectDetectionInterface):
             except Exception:
                 self.object_detectors.pop(model_name, None)
                 raise
-            # HEF carries no embedded class names; inject the (mapped) labels.
             detector.labels = {index: str(label) for index, label in OBJECT_LABELS.items()}
         else:
             await detector.initialize(model_name)

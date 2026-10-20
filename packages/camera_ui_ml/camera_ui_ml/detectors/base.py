@@ -61,11 +61,9 @@ class BaseDetector:
         finally:
             self._init_task = None
 
-    async def _configure(self, model_name: str) -> None:
-        """Read model-derived config (input size, labels) from ``self.backend``."""
+    async def _configure(self, model_name: str) -> None: ...
 
     def loaded_model(self, role: str | None = None) -> LoadedModel | None:
-        """What this detector has loaded, for the server's metrics view."""
         if not self._ready() or not self.model_name or self.backend is None:
             return None
 

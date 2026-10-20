@@ -419,7 +419,7 @@ func (p *ReolinkPlugin) OnCameraReleased(cameraID string) error {
 		cam.release(b)
 	}
 
-	// Offer the released camera for re-adoption without waiting for a rescan.
+	// offer the released camera for re-adoption without waiting for a rescan
 	if dev != nil && dev.NativeID() != "" {
 		p.mu.Lock()
 		entry, ok := p.discovered[dev.NativeID()]

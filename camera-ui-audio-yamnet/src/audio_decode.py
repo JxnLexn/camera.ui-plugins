@@ -13,7 +13,6 @@ _FMT_MULAW = 7
 
 
 def _build_alaw_table() -> np.ndarray[Any, Any]:
-    """Build ITU-T G.711 A-law to linear PCM16 lookup table."""
     table = np.empty(256, dtype=np.int16)
     for i in range(256):
         val = i ^ 0x55
@@ -31,7 +30,6 @@ def _build_alaw_table() -> np.ndarray[Any, Any]:
 
 
 def _build_ulaw_table() -> np.ndarray[Any, Any]:
-    """Build ITU-T G.711 mu-law to linear PCM16 lookup table."""
     table = np.empty(256, dtype=np.int16)
     for i in range(256):
         val = ~i & 0xFF
@@ -47,7 +45,6 @@ _ULAW_TABLE = _build_ulaw_table()
 
 
 def _decode_pcm(data: bytes, bits_per_sample: int) -> np.ndarray[Any, Any]:
-    """Decode linear PCM audio data to float32."""
     if bits_per_sample == 8:
         return (np.frombuffer(data, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
     elif bits_per_sample == 16:
@@ -69,10 +66,6 @@ def _decode_pcm(data: bytes, bits_per_sample: int) -> np.ndarray[Any, Any]:
 
 
 def decode_wav(data: bytes) -> tuple[np.ndarray[Any, Any], int]:
-    """Decode WAV file bytes to mono float32 waveform and sample rate.
-
-    Supports PCM (8/16/24/32-bit), IEEE float (32/64-bit), A-law, and mu-law.
-    """
     if len(data) < 12:
         raise ValueError("Data too short to be a valid WAV file")
 

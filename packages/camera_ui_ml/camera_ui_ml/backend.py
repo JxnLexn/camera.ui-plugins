@@ -39,17 +39,14 @@ class InferenceBackend(ABC):
 
     @property
     def device(self) -> str:
-        """Human-readable hardware this backend runs on (e.g. "CUDA:0", "CPU")."""
         return "unknown"
 
     @property
     def runtime(self) -> str | None:
-        """Inference framework and version, e.g. "openvino 2025.3.0"."""
         return None
 
     @property
     def precision(self) -> str | None:
-        """Weight precision of the loaded model: "fp32", "fp16", "int8"."""
         return None
 
     @abstractmethod
@@ -59,7 +56,6 @@ class InferenceBackend(ABC):
     def close(self) -> None: ...
 
     def adapt(self, image: NDArray, spec: InputSpec) -> Sequence[Any]:
-        """Realize the canonical HWC uint8 RGB image into runtime model inputs."""
         from .preprocess import to_tensor
 
         return [to_tensor(image, spec)]

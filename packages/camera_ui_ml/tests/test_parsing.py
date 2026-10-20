@@ -9,7 +9,6 @@ SLOTS = 10
 
 
 def distribution(text: str, winner: float = 0.999) -> np.ndarray:
-    """A cct-style output: one softmaxed distribution per slot, padded to the end."""
     rest = (1.0 - winner) / (len(ALPHABET) - 1)
     logits = np.full((SLOTS, len(ALPHABET)), rest, dtype=np.float32)
     for slot in range(SLOTS):

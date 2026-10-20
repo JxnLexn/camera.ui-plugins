@@ -115,8 +115,8 @@ struct HostTool: Tool {
   let parameters: GenerationSchema
   let turn: Turn
 
-  // the host runs the tool, the session waits here until the next request brings the result
   func call(arguments: GeneratedContent) async throws -> Prompt {
+    // the host runs the tool, the session waits here until the next request brings the result
     try await turn.wait(name: name, arguments: arguments.jsonString)
   }
 }

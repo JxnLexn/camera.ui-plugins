@@ -19,7 +19,6 @@ __kernel void process_frame(
     if (x >= width || y >= height) return;
     int idx = y * width + x;
 
-    // Gaussian blur
     int radius = (kernel_size - 1) / 2;
     float blurred_value = 0.0f;
     for (int i = -radius; i <= radius; i++) {
@@ -31,26 +30,20 @@ __kernel void process_frame(
         }
     }
 
-    // Store blurred value in temp buffer
     temp_buffer[idx] = blurred_value;
 
     if (first_frame) {
-        // Initialize background model
         background_model[idx] = blurred_value;
         write_imagef(output, (int2)(x, y), (float4)(0.0f, 0.0f, 0.0f, 1.0f));
     } else {
-        // Background subtraction
         float bg_pixel = background_model[idx];
 
-        // Update background model
         float updated_bg = bg_pixel * (1.0f - alpha) + blurred_value * alpha;
         background_model[idx] = updated_bg;
 
-        // Compute difference and threshold
         float diff = fabs(blurred_value - bg_pixel);
         float mask_value = (diff > threshold) ? 1.0f : 0.0f;
 
-        // Dilation
         float maxValue = mask_value;
         for (int dy = -dilation_size; dy <= dilation_size; dy++) {
             int sy = clamp(y + dy, 0, height - 1);

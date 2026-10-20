@@ -111,9 +111,6 @@ export class OnvifCamera {
         'ONVIF capabilities:',
         JSON.stringify({ hasPTZ: this.capabilities.hasPTZ, hasEvents: this.capabilities.hasEvents, advertisedTypes: this.capabilities.advertisedTypes }),
       );
-      // if (this.capabilities.eventProperties) {
-      //   this.camera.logger.trace('ONVIF event properties', JSON.stringify(this.capabilities.eventProperties, null, 2));
-      // }
 
       if (this.capabilities.hasPTZ) {
         await this.setupPTZSensor(this.device);
@@ -374,9 +371,7 @@ export class OnvifCamera {
         eventProperties = await this.device.events.getEventProperties();
         advertisedTypes = getSupportedDetectionTypes(eventProperties);
       } catch (error) {
-        // thingino (onvif_simple_server before 02/2026) truncates this response
-        // via a wrong Content-Length while the subscription itself works fine:
-        // assume motion instead of silently dropping all events
+        // thingino (onvif_simple_server before 02/2026) truncates this response, its events still work
         advertisedTypes = ['motion'];
         this.camera.logger.warn('Could not read ONVIF event properties, assuming motion support:', error instanceof Error ? error.message : error);
       }

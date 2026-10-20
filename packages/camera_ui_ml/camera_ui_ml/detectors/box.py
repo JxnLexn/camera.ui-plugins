@@ -60,7 +60,6 @@ class BoxDetector(BaseDetector):
         )
 
     async def detect(self, image: NDArray, threshold: float | None = None) -> list[RawDetection]:
-        """Detect on an HWC uint8 RGB array; boxes are in model-input pixel coords."""
         if not self._ready():
             return []
         assert self.backend is not None
@@ -77,7 +76,6 @@ class BoxDetector(BaseDetector):
         return nms(detections) if self._apply_nms else detections
 
     async def detect_frame(self, frame: VideoFrameData, threshold: float | None = None) -> list[RawDetection]:
-        """Detect on a raw video frame; boxes are rescaled to frame pixel coords."""
         if not self._ready():
             return []
 
@@ -91,7 +89,6 @@ class BoxDetector(BaseDetector):
     async def detect_single(
         self, image_data: bytes, metadata: ImageMetadata, threshold: float | None = None
     ) -> list[NormalizedDetection]:
-        """Detect on an encoded image; boxes are normalized to 0..1."""
         if not self._ready():
             return []
 

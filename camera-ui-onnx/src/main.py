@@ -712,8 +712,7 @@ class ONNXPlugin(
         if not embedder.initialized or not landmarker.initialized:
             return [None for _ in images]
 
-        # an empty vector says the picture holds no face the model can use, None
-        # is reserved for a plugin that could not run: the caller drops the first
+        # empty vector: no usable face, the caller drops it; None: the plugin could not run
         results = await embed_face_images(landmarker, embedder, images, space, landmarks)
         return [result for result in results]
 

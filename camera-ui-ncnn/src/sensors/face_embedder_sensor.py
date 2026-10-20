@@ -28,8 +28,7 @@ class NCNNFaceEmbedderSensor(FaceEmbedderSensor):
     def modelSpec(self) -> ModelSpec:
         space = self._plugin.face_embedder_space()
         return {
-            # the crop arrives padded around the face box, wider than the head's
-            # own input: the landmark model needs the context, the warp the pixels
+            # padded crop, wider than the head's input: landmarks need the context, the warp the pixels
             "input": {"width": FACE_EMBEDDER_CROP_SIZE, "height": FACE_EMBEDDER_CROP_SIZE, "format": "rgb"},
             "triggerLabels": [],
             "embeddingModel": space,

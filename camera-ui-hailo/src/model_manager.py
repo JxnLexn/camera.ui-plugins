@@ -15,7 +15,6 @@ _DEFAULT_ARCH = "hailo8l"  # Raspberry Pi AI Kit chip
 
 
 def _detect_arch() -> str | None:
-    # Detect the Hailo chip by parsing `hailortcli fw-control identify`.
     try:
         result = subprocess.run(
             ["hailortcli", "fw-control", "identify"],

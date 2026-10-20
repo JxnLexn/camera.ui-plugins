@@ -82,7 +82,7 @@ def _device_label(sessions: list[Any]) -> str:
 
 
 def _dim(shape: Sequence[Any], index: int) -> int:
-    # Non-box models have <4 dims or symbolic dynamic dims (str) → fall back to 0.
+    # non-box models have fewer dims or symbolic ones (str)
     try:
         return int(shape[index])
     except (TypeError, ValueError, IndexError):

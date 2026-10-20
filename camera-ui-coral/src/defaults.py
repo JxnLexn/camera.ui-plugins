@@ -14,10 +14,9 @@ OBJECT_MODELS: dict[str, int] = {
 
 DEFAULT_OBJECT_MODEL = "yolo-v9-s-320"
 
-# TFLite / Edge TPU models carry no embedded class names, so object labels are hardcoded.
 OBJECT_LABELS: dict[int, DetectionLabel] = {0: "person", 1: "vehicle", 2: "animal"}
 
-# Prefer the Edge TPU (Coral) when the delegate + device are present; falls back to CPU int8.
+# falls back to CPU int8 when the Edge TPU delegate or device is missing
 DEFAULT_USE_EDGETPU = True
 
 DEFAULT_OPTION = "default"

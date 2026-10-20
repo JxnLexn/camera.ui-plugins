@@ -27,7 +27,7 @@ class WyzeMotionSensor(MotionSensor):
         self._loop = None
 
     def _on_camera_update(self, camera: WyzeCamera) -> None:
-        # Called from wyzeapy's updater thread — hop back to the asyncio loop.
+        # called from wyzeapy's updater thread, hop back to the asyncio loop
         if self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._update_from_camera, camera)
 

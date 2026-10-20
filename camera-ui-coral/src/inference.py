@@ -23,7 +23,7 @@ class CoralBackend(InferenceBackend):
         self._input_size = (width, height)
 
         self._output_details = interpreter.get_output_details()
-        # one interpreter isn't safe for concurrent invoke (and the Edge TPU is a single device)
+        # an interpreter is not safe for concurrent invoke, and the Edge TPU is a single device
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="coral-infer")
 
     @property
@@ -31,7 +31,7 @@ class CoralBackend(InferenceBackend):
         return self._input_size
 
     def metadata(self) -> Mapping[str, str]:
-        return {}  # tflite carries no usable class names; labels are hardcoded in the plugin
+        return {}  # tflite carries no class names, the plugin hardcodes them
 
     @property
     def runtime(self) -> str:
@@ -42,7 +42,7 @@ class CoralBackend(InferenceBackend):
         return self._device
 
     def adapt(self, image: NDArray, spec: InputSpec) -> Sequence[Any]:
-        # Coral wants NHWC int8; ignore the caller's layout/normalize and requantize 0..255.
+        # Coral wants NHWC int8 whatever the caller asked for, requantized from 0..255
         local = InputSpec(spec.width, spec.height, layout="nhwc", normalize="none", dtype="uint8")
         pixels = to_tensor(image, local).astype(np.float32)
         quantized = np.round(pixels / 255.0 / self._input_scale + self._input_zero_point)

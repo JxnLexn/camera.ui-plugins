@@ -16,7 +16,7 @@ RawDetection = tuple[int, float, Box]
 class FaceLandmarks:
     score: float
     box: Box
-    #: right eye, left eye, nose, right mouth corner, left mouth corner
+    # right eye, left eye, nose, right mouth corner, left mouth corner
     points: NDArray
 
 

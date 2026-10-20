@@ -98,8 +98,7 @@ export function entityUnavailable(imported: ImportedSensor, state: HaState): boo
 export function applyEntityState(imported: ImportedSensor, state: HaState, live: boolean): void {
   if (imported.kind === 'doorbell') {
     if (state.state === 'unavailable') return;
-    // an event entity's state is the last-trigger timestamp: only a live change
-    // is a press, syncs and reconnect replays just seed the baseline
+    // an event entity's state is its last trigger time, only a live change is a press
     const changed = imported.lastEventState !== undefined && imported.lastEventState !== state.state;
     imported.lastEventState = state.state;
     if (live && changed && state.state !== 'unknown') imported.sensor.trigger();

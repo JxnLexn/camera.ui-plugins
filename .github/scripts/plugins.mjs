@@ -21,8 +21,7 @@ export const RUNNERS = {
   'camera-ui-coreml': 'xcode-27',
 };
 
-// CI/publish python; plugins absent here use the default 3.13
-// (openvino 2024.6 ships no cp313 wheels)
+// default 3.13, openvino 2024.6 ships no cp313 wheels
 export const PYTHON_VERSIONS = {
   'camera-ui-openvino-legacy': '3.11',
 };

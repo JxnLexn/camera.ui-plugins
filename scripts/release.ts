@@ -5,35 +5,6 @@ import { dirname, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
-// Bump a plugin's version, commit it, tag it `<plugin>-v<version>` and push.
-// The matching `release.yml` workflow then builds, bundles and publishes that
-// plugin to npm with provenance.
-//
-//   tsx scripts/release.ts camera-ui-homekit patch
-//   tsx scripts/release.ts camera-ui-eufy 1.2.0
-//   tsx scripts/release.ts camera-ui-coreml 0.1.0-beta.1 --yes
-//
-// Several plugins can be released in one go by listing them before the spec;
-// ALL releases every camera-ui-* plugin in this monorepo. With more than one
-// plugin (or ALL) only the bump specs are allowed, since an
-// explicit version rarely fits plugins with divergent version histories:
-//
-//   tsx scripts/release.ts camera-ui-homekit camera-ui-eufy patch
-//   tsx scripts/release.ts ALL patch
-//   tsx scripts/release.ts ALL minor --yes --skip-checks
-//
-// beta moves a plugin one beta further: a stable version gets the next patch as
-// beta.0, a running beta counts up, an alpha switches to beta.0 of its version:
-//
-//   tsx scripts/release.ts camera-ui-reolink beta     1.2.24-beta.0 -> 1.2.24-beta.1
-//   tsx scripts/release.ts ALL beta                   1.2.4 -> 1.2.5-beta.0
-//
-// minor-beta and major-beta start the beta of the next minor or major instead; a
-// beta already heading there counts up like beta does:
-//
-//   tsx scripts/release.ts camera-ui-eufy minor-beta  2.0.2-beta.0 -> 2.1.0-beta.0
-//   tsx scripts/release.ts camera-ui-eufy minor-beta  2.1.0-beta.0 -> 2.1.0-beta.1
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT = resolve(__dirname, '..');
@@ -166,7 +137,7 @@ function planPlugin(name: string, spec: string): PluginPlan {
     git(`rev-parse ${tag}`, { capture: true });
     fail(`Tag ${tag} already exists.`);
   } catch {
-    // tag does not exist - good
+    // tag is free
   }
 
   const addPaths = [`${name}/package.json`];
@@ -208,7 +179,6 @@ async function main(): Promise<void> {
     fail(`Multiple plugins (or ALL) only accept ${BUMP_SPECS.join('/')} (got '${spec}').`);
   }
 
-  // Safety: clean tree, on main, not behind origin.
   if (git('status --porcelain', { capture: true })) {
     fail('Working tree not clean - commit or stash first.');
   }
@@ -220,10 +190,10 @@ async function main(): Promise<void> {
       fail('Local main is behind origin/main - pull first.');
     }
   } catch {
-    // offline / no remote tracking - skip the behind check
+    // offline or no remote tracking, skip the behind check
   }
 
-  // Build the release plan (validates everything before any mutation).
+  // validates everything before the first mutation
   const names = all ? discoverPlugins() : targets;
   if (!names.length) fail('No camera-ui-* plugins found.');
   const plans = names.map((name) => planPlugin(name, spec));
@@ -242,12 +212,11 @@ async function main(): Promise<void> {
     }
   }
 
-  // Pre-flight checks first so a build failure leaves the tree untouched.
+  // checks first, so a build failure leaves the tree untouched
   if (!skipChecks) {
     for (const plan of plans) runChecks(plan);
   }
 
-  // From here we mutate the repo. Roll the whole batch back on any failure.
   const startHead = git('rev-parse HEAD', { capture: true });
   const createdTags: string[] = [];
   try {

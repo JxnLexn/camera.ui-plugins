@@ -87,17 +87,6 @@ function main(): void {
   run('npm install');
   ok('root dependencies installed');
 
-  // step("Building externals (cli, sdk)");
-  // if (
-  //   existsSync(resolve(ROOT, "externals", "cli")) &&
-  //   existsSync(resolve(ROOT, "externals", "sdk"))
-  // ) {
-  //   run("npm run build:externals");
-  //   ok("externals built");
-  // } else {
-  //   info("externals missing — did submodule init succeed? skipping");
-  // }
-
   setupPython();
 
   step('Installing plugin dependencies');

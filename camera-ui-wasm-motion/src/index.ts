@@ -10,7 +10,6 @@ export default class WASMMotion extends BasePlugin {
   constructor(logger: LoggerService, api: PluginAPI, storage: DeviceStorage<any>) {
     super(logger, api, storage);
 
-    // this.api.on(API_EVENT.FINISH_LAUNCHING, this.start.bind(this));
     this.api.on(API_EVENT.SHUTDOWN, this.stop.bind(this));
   }
 

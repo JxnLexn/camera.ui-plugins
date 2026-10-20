@@ -20,7 +20,7 @@ from defaults import (
 from inference import NcnnBackend
 from vulkan import gpu_count
 
-# pnnx-converted .param carries no input dims; sizes come from the registry.
+# pnnx-converted .param files carry no input dims
 _BOX_INPUT_SIZES = {**OBJECT_MODELS, **FACE_DETECTOR_MODELS, **LPD_DETECTOR_MODELS, **SEGMENTATION_MODELS}
 
 
@@ -71,6 +71,6 @@ class NcnnModelManager(BaseModelManager):
 
 
 def _box_input_size(model_name: str) -> tuple[int, int]:
-    # Embedder/OCR aren't in the registry; (0, 0) is harmless for them.
+    # embedders and OCR are not in the registry, (0, 0) is harmless for them
     px = _BOX_INPUT_SIZES.get(model_name, 0)
     return (px, px)

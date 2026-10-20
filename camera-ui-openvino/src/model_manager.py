@@ -54,17 +54,13 @@ class OpenVinoModelManager(BaseModelManager):
 
     def _compile(self, model_name: str, xml_path: str, device: str) -> tuple[Any, str]:
         model = self._core.read_model(xml_path)
-        # detection asks for one frame and waits for the answer: THROUGHPUT lets the GPU
-        # queue up to 128 requests and delays a single one by ~1s (11ms with LATENCY)
+        # THROUGHPUT lets the GPU queue up to 128 requests and delays a single frame by ~1s (11ms with LATENCY)
         config = {"PERFORMANCE_HINT": "LATENCY"}
         if _dynamic_inputs(model):
             self._make_static(model_name, model)
         candidates = [device, "AUTO", "CPU"]
         if _dynamic_inputs(model):
-            # the NPU compiler aborts the whole process on dynamic input shapes
-            # instead of raising, so such a model must never reach it, not even as
-            # an AUTO candidate compiled in the background (dynamic outputs from
-            # end2end NMS are fine)
+            # the NPU compiler aborts the process on dynamic input shapes, keep NPU out even as an AUTO candidate
             candidates = [self._without_npu(dev) for dev in candidates]
             if candidates[0] != device:
                 self.logger.log(
@@ -86,9 +82,7 @@ class OpenVinoModelManager(BaseModelManager):
         failure: Exception | None = None
         precisions = (None, "f32") if "GPU" in device else (None,)
 
-        # a single GPU stream idles during the host transfers, a second one costs no
-        # latency and serves roughly 50% more cameras; on CPU streams split the cores
-        # and cost latency, so only a named GPU gets them (never AUTO, it may land elsewhere)
+        # a second GPU stream serves ~50% more cameras at no latency cost, on CPU or AUTO streams cost latency
         if device.startswith("GPU"):
             config = {**config, "NUM_STREAMS": "2"}
 
@@ -119,8 +113,7 @@ class OpenVinoModelManager(BaseModelManager):
 
         self._failed_devices.add(device)
         self.logger.warn(f"{device} cannot compile {model_name}, using the next device instead: {reason}")
-        # on Linux old Intel GPUs are covered by the legacy compute libs (the docker
-        # image ships them), only Windows drivers can't be helped from outside
+        # the docker image covers old Intel GPUs with legacy compute libs, Windows drivers cannot be helped
         if "GPU" in device and sys.platform == "win32" and not LEGACY_RUNTIME:
             self.logger.warn("Intel GPUs up to 10th gen Core work with the OpenVino Legacy plugin instead")
         self.logger.debug(detail)
@@ -153,7 +146,7 @@ class OpenVinoModelManager(BaseModelManager):
 
     @staticmethod
     def _describe_device(compiled: Any, requested: str) -> str:
-        # Selectors like AUTO hide what actually runs — report the resolved device(s) too.
+        # selectors like AUTO hide what actually runs
         try:
             resolved = ",".join(compiled.get_property("EXECUTION_DEVICES"))
         except Exception:

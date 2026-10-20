@@ -50,7 +50,7 @@ export class OnvifObjectSensor extends ObjectSensor {
       return;
     }
 
-    // ONVIF events lack bounding boxes — synthesize a full-frame detection per category for labels.
+    // ONVIF events carry no boxes, a full-frame detection per category carries the label
     const detections: TrackedDetection[] = Array.from(this.activeCategories).map((category) => ({
       label: category,
       confidence: 1,

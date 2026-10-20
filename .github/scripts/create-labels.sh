@@ -5,7 +5,6 @@ REPO="${1:-cameraui/plugins}"
 
 # name|color|description
 labels=(
-  # per-plugin (labeler.yml) — applied when a PR touches that plugin's folder
   "audio-yamnet|c5def5|Changes to the YAMNet Audio plugin"
   "coral|c5def5|Changes to the Coral plugin"
   "coreml|c5def5|Changes to the CoreML plugin"
@@ -30,13 +29,11 @@ labels=(
   "wasm-motion|c5def5|Changes to the WASM Motion plugin"
   "wyze|c5def5|Changes to the Wyze plugin"
 
-  # cross-cutting (labeler.yml)
   "externals|d4c5f9|Changes to the externals/ submodules"
   "dependencies|0366d6|Dependency updates"
   "workflow|ededed|CI / GitHub config changes"
   "docs|0075ca|Documentation changes"
 
-  # branch-based (pr-labeler.yml)
   "feature|a2eeef|New feature"
   "fix|d73a4a|Bug fix"
   "chore|ededed|Maintenance / chores"

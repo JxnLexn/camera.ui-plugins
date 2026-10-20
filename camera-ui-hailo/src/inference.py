@@ -9,8 +9,6 @@ from typing import Any
 import numpy as np
 from camera_ui_ml import InferenceBackend, Outputs
 
-# NOTE: this HailoRT runtime path has no CPU emulation, so it is verified only on a Hailo device.
-
 
 class HailoBackend(InferenceBackend):
     def __init__(self, hef_path: str, device: str = "unknown", device_id: str | None = None) -> None:
@@ -48,7 +46,7 @@ class HailoBackend(InferenceBackend):
         return self._input_size
 
     def metadata(self) -> Mapping[str, str]:
-        return {}  # HEF carries no usable class names; labels are hardcoded in the plugin
+        return {}  # HEF carries no class names, the plugin hardcodes them
 
     @property
     def runtime(self) -> str:
@@ -79,5 +77,5 @@ class HailoBackend(InferenceBackend):
         job = self._model.run_async([bindings], lambda _completion: None)
         job.wait(10000)
 
-        # HAILO_NMS output: a single per-class structure (list indexed by class id).
+        # HAILO_NMS output is one structure per class, indexed by class id
         return [bindings.output(self._output_names[0]).get_buffer()]

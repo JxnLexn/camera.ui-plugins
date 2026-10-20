@@ -109,7 +109,6 @@ class YAMNetPlugin(BasePlugin, AudioDetectionInterface):
         rms = float(np.sqrt(np.mean(waveform**2)))
         dbfs = 20 * math.log10(max(rms, 1e-10)) if rms > 0 else -100.0
 
-        # YAMNet requires exactly YAMNET_SAMPLES_PER_FRAME (15600) samples per inference
         all_scores: dict[str, float] = {}
 
         for start in range(0, len(waveform), YAMNET_SAMPLES_PER_FRAME):

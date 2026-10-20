@@ -58,7 +58,7 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
           password: device.password,
           url: onvifUrl,
         };
-        // Clear credentials but keep device info for onCameraReleased
+        // the device info stays for onCameraReleased
         delete device.username;
         delete device.password;
       }
@@ -229,7 +229,7 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
         preload: false,
       });
     } else if (media.snapshot?.isSnapshot) {
-      // JPEG RTSP stream as snapshot fallback (e.g. Tapo cameras)
+      // a JPEG RTSP stream as snapshot fallback, e.g. Tapo
       const safeName = media.snapshot.profileName.toLowerCase().replace(/[^a-z0-9_]/g, '_');
       config.sources.push({
         name: safeName,
@@ -301,7 +301,7 @@ export default class OnvifPlugin extends BasePlugin implements DiscoveryProvider
       }
     }
 
-    // discoveryInfo comes from WS-Discovery and is available without authentication.
+    // discoveryInfo comes from WS-Discovery and needs no authentication
     const discoveryInfo = device.discoveryInfo;
     const infoName = discoveryInfo?.name?.trim();
     const infoHardware = discoveryInfo?.hardware?.trim();

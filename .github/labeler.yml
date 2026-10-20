@@ -68,7 +68,6 @@ wyze:
   - changed-files:
       - any-glob-to-any-file: 'camera-ui-wyze/**'
 
-# Cross-cutting labels.
 externals:
   - changed-files:
       - any-glob-to-any-file: 'externals/**'

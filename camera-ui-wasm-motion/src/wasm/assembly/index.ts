@@ -34,8 +34,7 @@ function blurFrame(radius: i32): void {
   if (radius < 1) return;
 
   const divisor: i32 = radius * 2 + 1;
-  // Fixed-point reciprocal: (sum * recip) >> 16 == round(sum / divisor),
-  // avoids an integer division per pixel.
+  // fixed-point reciprocal, (sum * recip) >> 16 == round(sum / divisor) without a division per pixel
   const recip: i32 = ((1 << 16) + (divisor >> 1)) / divisor;
 
   for (let y: i32 = 0; y < height; y++) {
@@ -106,14 +105,14 @@ function dilate1DScalar(srcBase: usize, srcStride: i32, dstBase: usize, dstStrid
   const gb = vhG.dataStart;
   const hb = vhH.dataStart;
 
-  // Pad by r on both sides with the edge values so no window crosses a border.
+  // pad by r with the edge values so no window crosses a border
   const edge0 = load<u8>(srcBase);
   const edgeN = load<u8>(srcBase + <usize>(n - 1) * <usize>srcStride);
   for (let j = 0; j < r; j++) store<u8>(lb + j, edge0);
   for (let j = 0; j < n; j++) store<u8>(lb + r + j, load<u8>(srcBase + <usize>j * <usize>srcStride));
   for (let j = 0; j < r; j++) store<u8>(lb + r + n + j, edgeN);
 
-  // Block prefix (g) and suffix (h) maxima over the padded line.
+  // block prefix (g) and suffix (h) maxima over the padded line
   for (let bs = 0; bs < m; bs += k) {
     const be = bs + k < m ? bs + k : m;
 
@@ -134,7 +133,7 @@ function dilate1DScalar(srcBase: usize, srcStride: i32, dstBase: usize, dstStrid
     }
   }
 
-  // out[i] = max(h[i], g[i + 2r]); window [i, i+2r] in padded coords.
+  // out[i] = max(h[i], g[i + 2r]), window [i, i+2r] in padded coords
   for (let i = 0; i < n; i++) {
     const hv = load<u8>(hb + i);
     const gv = load<u8>(gb + i + 2 * r);
@@ -236,7 +235,7 @@ function findBoundingBoxes(minArea: i32): i32 {
           let seedX = index % width;
           let seedY = index / width;
 
-          // Queue stores packed (y << 16 | x) to avoid div/mod per popped pixel.
+          // packed (y << 16 | x) saves a div/mod per popped pixel
           store<i32>(queueBuffer.dataStart + tail * 4, (seedY << 16) | seedX);
           tail++;
           store<u8>(visitedBuffer.dataStart + index, 1);

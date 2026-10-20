@@ -10,8 +10,7 @@ const POSITION_EPSILON = 0.001;
 const IDLE_POLLS_TO_STOP = 3;
 const FAST_PATH_GRACE_MS = 1500;
 
-// ONVIF FOV translation space: x/y in [-1, 1] where 1.0 shifts the view by
-// HALF the frame (SDK deltas are full frame fractions, hence the ×2 mapping)
+// x/y in [-1, 1], 1.0 shifts the view by half the frame, so SDK deltas get doubled
 const FOV_TRANSLATION_SPACE = 'http://www.onvif.org/ver10/tptz/PanTiltSpaces/TranslationSpaceFov';
 
 function clamp(value: number): number {
@@ -341,7 +340,7 @@ export class OnvifPTZSensor extends PTZControl {
       this.cameraDevice.logger.warn('Camera does not support PTZ');
     }
 
-    // Triggers broadcast to consumers.
+    // the setter broadcasts to consumers
     this.capabilities = caps;
   }
 

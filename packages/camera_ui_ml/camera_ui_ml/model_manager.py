@@ -53,17 +53,13 @@ class BaseModelManager(ABC):
         self._load_tasks.clear()
 
     def compile_cache_dir(self, runtime_tag: str) -> str:
-        """Directory for runtime compile artifacts (compiled blobs, optimized graphs).
-        Lives inside the versioned model dir, so a model re-download clears it and the
-        ``.backupignore`` marker keeps it out of backups. ``runtime_tag`` must include
-        the runtime version — compiled artifacts rarely survive a runtime upgrade."""
+        # runtime_tag must carry the runtime version, compiled artifacts rarely survive an upgrade
         path = os.path.join(self.model_path, ".compile-cache", runtime_tag)
         os.makedirs(path, exist_ok=True)
         return path
 
     def clip_processor_files(self) -> Mapping[str, tuple[str, str]]:
-        """CLIP processor (tokenizer + image preprocessor) files: key → (url, path relative to
-        ``model_path``). Empty (default) = plugin has no CLIP; CLIP plugins must override this."""
+        # CLIP plugins override this: key → (url, path relative to model_path)
         return {}
 
     async def ensure_clip_processor(self) -> str | None:
@@ -76,12 +72,10 @@ class BaseModelManager(ABC):
         return os.path.dirname(os.path.join(self.model_path, first_rel))
 
     @abstractmethod
-    def model_files(self, model_name: str) -> Mapping[str, tuple[str, str]]:
-        """Map of file key → (download_url, path relative to ``model_path``)."""
+    def model_files(self, model_name: str) -> Mapping[str, tuple[str, str]]: ...
 
     @abstractmethod
-    async def build_backend(self, model_name: str, paths: Mapping[str, str]) -> InferenceBackend:
-        """Build the runtime backend from the (already downloaded) local paths."""
+    async def build_backend(self, model_name: str, paths: Mapping[str, str]) -> InferenceBackend: ...
 
     async def _load(self, model_name: str) -> InferenceBackend:
         files = self.model_files(model_name)

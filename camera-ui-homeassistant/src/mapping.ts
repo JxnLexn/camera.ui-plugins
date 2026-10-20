@@ -3,7 +3,6 @@ import { SENSOR_META, SensorDomain, SensorType } from '@camera.ui/sdk';
 import type { SensorMeta } from '@camera.ui/sdk';
 import type { HaState } from './types.js';
 
-// HA device_classes that mean the same thing as one of our catalog classes
 const DEVICE_CLASS_ALIASES: Record<string, string> = {
   door: 'opening',
   window: 'opening',

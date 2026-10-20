@@ -10,7 +10,7 @@ let rustDetector: typeof RustDetector | undefined;
 try {
   rustDetector = require('@camera.ui/rust-detector');
 } catch {
-  //
+  // not installed
 }
 
 export interface RustMotionStorageValues {
@@ -143,7 +143,6 @@ export class RustMotionSensor extends MotionDetectorSensor<RustMotionStorageValu
 
     return {
       detected: boundingBoxes.length > 0,
-      // rust-detector returns [x1, y1, x2, y2] pixel corners; SDK box wants { x, y, width, height }
       detections: boundingBoxes.map((box) => {
         const [x1, y1, x2, y2] = box;
         return {

@@ -39,20 +39,14 @@ LPD_DETECTOR_MODELS: dict[str, int] = {
 
 @dataclass(frozen=True)
 class FaceEmbedderSpec:
-    """How a recognition head wants its crop. The key it is stored under names
-    the vector space, which is what the NVR keys enrolled faces by, so it
-    changes whenever the preprocessing changes, not only the weights."""
-
     model: str
     size: int
     normalize: Normalize
     aligned: bool
 
 
+# the key names the vector space enrolled faces are stored under, it changes with the crop too
 FACE_EMBEDDERS: dict[str, FaceEmbedderSpec] = {
-    # the suffixes name the crop, not the weights: both heads see a padded face
-    # box now, where they used to get the detector's tight box, and that alone
-    # makes the vectors incomparable to the ones already stored
     "facenet-inceptionresnetv1-512-padded": FaceEmbedderSpec(
         "facenet-inceptionresnetv1-512", 160, "facenet", False
     ),
@@ -64,7 +58,6 @@ FACE_EMBEDDER_MODELS: list[str] = list(FACE_EMBEDDERS)
 FACE_LANDMARK_MODEL = "yunet-256-face-landmarks"
 FACE_LANDMARK_INPUT_SIZE = 256
 
-# the padded face crop the server sends; the landmark model takes it from there
 FACE_EMBEDDER_CROP_SIZE = 256
 
 PERSON_EMBEDDER_MODEL = "person-reid-256"
@@ -96,10 +89,9 @@ OCR_MAX_SLOTS = 10
 OCR_INPUT_WIDTH = 128
 OCR_INPUT_HEIGHT = 64
 
-# NCNN models carry no embedded class names, so object labels are hardcoded.
 OBJECT_LABELS: dict[int, DetectionLabel] = {0: "person", 1: "vehicle", 2: "animal"}
 
-# NCNN runs on Vulkan when available (GPU) and falls back to CPU otherwise.
+# falls back to CPU without a Vulkan GPU
 DEFAULT_USE_VULKAN = True
 
 DEFAULT_OPTION = "default"

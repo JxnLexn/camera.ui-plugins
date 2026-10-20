@@ -43,7 +43,6 @@ class Segmenter(BaseDetector):
         return InputSpec(self.input_size[0], self.input_size[1], layout="nchw", normalize="unit")
 
     async def segment(self, rgb: NDArray, box: BoundingBox) -> ObjectMask | None:
-        """Outline the object at ``box`` (normalized to ``rgb``); the mask box is normalized the same way."""
         if not self._ready() or rgb.size == 0:
             return None
         assert self.backend is not None

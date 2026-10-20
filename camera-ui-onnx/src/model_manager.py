@@ -18,7 +18,6 @@ from defaults import (
 )
 from inference import OnnxBackend
 
-# onnxruntime provider list, e.g. ["CUDAExecutionProvider", "CPUExecutionProvider"]
 ProviderList = Sequence[Any]
 
 _ORT_TO_NP: dict[str, Any] = {

@@ -113,10 +113,10 @@ function collectScreenshots(folder: string, dir: string): string[] {
     .map((file) => `${RAW_BASE}/${folder}/screenshots/${file}`);
 }
 
-// null when the package is not on npm; a registry that cannot be reached throws, so no half catalog gets written
 async function fetchPublished(name: string): Promise<{ version: string; protocolLevel?: number } | null> {
   const response = await fetch(`https://registry.npmjs.org/${name.replace('/', '%2F')}/latest`);
   if (response.status === 404) return null;
+  // a registry error throws, so no half catalog gets written
   if (!response.ok) throw new Error(`npm registry answered ${response.status} for ${name}`);
 
   const pkg = (await response.json()) as { version: string; cameraui?: { protocolLevel?: unknown } };

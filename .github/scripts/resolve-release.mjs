@@ -23,8 +23,7 @@ if (!isNode && !isPython && !isGo) {
 const runtime = isPython ? 'python' : isGo ? 'go' : 'node';
 const externals = isNode ? NODE[plugin] : isGo ? GO[plugin] : '';
 
-// dist-tag derives from the semver prerelease label. cui publish only knows
-// --alpha / --beta / --latest, so anything else is rejected up front.
+// cui publish only knows --alpha, --beta and --latest, other prerelease labels fail up front
 const prerelease = version.includes('-') ? version.split('-')[1].split('.')[0] : '';
 let distTag;
 if (prerelease === '') {

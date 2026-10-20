@@ -159,7 +159,8 @@ export class EufyLightControl extends LightControl implements BindableSensor {
 
   public sync(): void {
     const light = this.device?.light?.();
-    if (light?.isOn !== undefined) void (light.isOn ? super.setOn() : super.setOff());
+    if (light?.isOn === true) super.setOn();
+    else if (light?.isOn === false) super.setOff();
     if (light?.brightness !== undefined) super.setBrightness(light.brightness);
   }
 
@@ -204,7 +205,8 @@ export class EufySirenControl extends SirenControl implements BindableSensor {
 
   public sync(): void {
     const active = this.device?.siren?.()?.active;
-    if (active !== undefined) void (active ? super.setActive() : super.setInactive());
+    if (active === true) super.setActive();
+    else if (active === false) super.setInactive();
   }
 
   public override async setActive(): Promise<void> {
@@ -248,7 +250,8 @@ export class EufyCameraSwitch extends SwitchControl implements BindableSensor {
 
   public sync(): void {
     const enabled = this.device?.camera?.()?.enabled;
-    if (enabled !== undefined) void (enabled ? super.setOn() : super.setOff());
+    if (enabled === true) super.setOn();
+    else if (enabled === false) super.setOff();
   }
 
   public override async setOn(): Promise<void> {

@@ -116,8 +116,7 @@ class OpenVinoPlugin(
         self._core = ov.Core()
         self.logger.log(f"Available devices: {', '.join(self._describe_devices())}")
 
-        # enumerated once: indexed devices (GPU.0, GPU.1, NPU variants) join the
-        # static options so multi-GPU boxes can pin a specific card
+        # indexed devices (GPU.0, GPU.1, NPU variants) let multi-GPU boxes pin a specific card
         self._device_options = [
             *OPENVINO_DEVICES,
             *[d for d in self._core.available_devices if d not in OPENVINO_DEVICES and d != "CPU"],
@@ -228,7 +227,6 @@ class OpenVinoPlugin(
             except Exception:
                 self.object_detectors.pop(model_name, None)
                 raise
-            # OpenVINO IR has no embedded class names; inject the trained labels.
             detector.labels = {index: str(label) for index, label in OBJECT_LABELS.items()}
         else:
             await detector.initialize(model_name)
@@ -707,8 +705,7 @@ class OpenVinoPlugin(
         if not embedder.initialized or not landmarker.initialized:
             return [None for _ in images]
 
-        # an empty vector says the picture holds no face the model can use, None
-        # is reserved for a plugin that could not run: the caller drops the first
+        # empty vector: no usable face, the caller drops it; None: the plugin could not run
         results = await embed_face_images(landmarker, embedder, images, space, landmarks)
         return [result for result in results]
 
@@ -850,10 +847,10 @@ class OpenVinoPlugin(
         if has_npu:
             return "AUTO:NPU,CPU"
         if dgpus:
-            # OpenVINO can't reliably split one model across multiple NVIDIA dGPUs; let AUTO pick one.
+            # OpenVINO cannot split one model across NVIDIA dGPUs reliably, AUTO picks one
             return f"AUTO:{','.join(dgpus)},CPU"
         if len(gpus) > 1:
-            # Multiple (e.g. Intel Arc) GPUs → MULTI round-robins requests across them.
+            # MULTI round-robins requests across the GPUs
             return "MULTI:" + ",".join(gpus)
         if has_gpu:
             return "GPU"

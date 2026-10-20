@@ -42,7 +42,6 @@ from sensors.object_sensor import CoralObjectSensor
 
 
 def _edgetpu_status() -> str:
-    """Best-effort probe: is the Edge TPU usable? (runtime lib + PCIe device node)"""
     nodes = sorted(glob.glob("/dev/apex_*"))
     lib = ctypes.util.find_library("edgetpu")
     if nodes and lib:
@@ -135,7 +134,7 @@ class CoralPlugin(BasePlugin, ObjectDetectionInterface):
     async def get_object_detector(self, model_name: str) -> BoxDetector:
         detector = self.object_detectors.get(model_name)
         if not detector:
-            # Coral emits the raw YOLOv9 head (decoded on the host); apply NMS to dedupe boxes.
+            # the raw YOLOv9 head is decoded on the host, no in-graph NMS
             detector = BoxDetector(self.model_manager, self.logger, name="object detector", apply_nms=True)
             self.object_detectors[model_name] = detector
             try:
@@ -143,7 +142,6 @@ class CoralPlugin(BasePlugin, ObjectDetectionInterface):
             except Exception:
                 self.object_detectors.pop(model_name, None)
                 raise
-            # tflite carries no embedded class names; inject the trained labels.
             detector.labels = {index: str(label) for index, label in OBJECT_LABELS.items()}
         else:
             await detector.initialize(model_name)

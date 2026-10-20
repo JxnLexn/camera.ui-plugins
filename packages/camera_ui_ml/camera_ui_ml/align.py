@@ -20,8 +20,6 @@ ARCFACE_DST_112 = np.array(
 
 
 def umeyama_similarity(src: NDArray, dst: NDArray) -> NDArray:
-    """Least-squares similarity transform (rotation, uniform scale, translation)
-    mapping ``src`` onto ``dst``, as a (2, 3) affine matrix."""
     src = np.asarray(src, dtype=np.float64)
     dst = np.asarray(dst, dtype=np.float64)
     n, dim = src.shape
@@ -47,7 +45,6 @@ def umeyama_similarity(src: NDArray, dst: NDArray) -> NDArray:
 
 
 def warp_face(rgb: NDArray, points: NDArray, size: int = 112) -> NDArray:
-    """Warp a face onto the canonical ``size`` x ``size`` template from its five points."""
     scale = size / 112.0
     matrix = umeyama_similarity(np.asarray(points, dtype=np.float64), ARCFACE_DST_112 * scale)
 

@@ -63,7 +63,6 @@ class ClipEncoder:
         self.processor = None
 
     async def embed_image(self, image: NDArray) -> list[float]:
-        """Embed an HWC uint8 RGB image."""
         if not self._ready():
             return []
         assert self.vision is not None

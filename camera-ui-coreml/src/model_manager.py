@@ -70,8 +70,7 @@ class CoreMlModelManager(BaseModelManager):
         return CoreMlBackend(model, spec, _DEVICE_LABELS.get(mode, mode))
 
     def _load_model(self, model_name: str, pkg_path: str, compute_units: Any) -> tuple[Any, Any]:
-        # spec always comes from the source package: a cached CompiledMLModel
-        # has no get_spec
+        # a cached CompiledMLModel has no get_spec, the spec comes from the source package
         spec = ct.utils.load_spec(pkg_path)
 
         compiled_path = os.path.join(

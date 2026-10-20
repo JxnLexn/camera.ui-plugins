@@ -52,10 +52,6 @@ DETECTION_FLOOR = 0.25
 
 
 def requested_threshold(config: Mapping[str, Any] | None) -> float | None:
-    """The ``threshold`` a caller put into a test method's config, never below the floor.
-
-    None when the caller set none, the detector then keeps its own default.
-    """
     value = config.get("threshold") if config else None
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None

@@ -144,7 +144,6 @@ func newReolinkPTZ(cam *reolinkCamera) *reolinkPTZ {
 		cam:        cam,
 	}
 
-	// Advertise only the axes the camera's Support report confirmed.
 	var caps []string
 	if cam.settings.PTZPan {
 		caps = append(caps, string(sdk.PTZCapabilityPan))

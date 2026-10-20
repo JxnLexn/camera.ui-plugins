@@ -29,8 +29,7 @@ class Embedder(BaseDetector):
         self.name = name
         self.input_size = (size, size)
         self.normalize = normalize
-        # ArcFace-style heads expect the canonical 112x112 template, a plain box
-        # crop drops them from 51% to near zero
+        # ArcFace-style heads need the 112x112 template, a plain box crop drops them from 51% to near zero
         self.aligned = aligned
 
     @property

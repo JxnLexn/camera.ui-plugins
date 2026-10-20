@@ -46,7 +46,6 @@ class OpenCV(BasePlugin, MotionDetectionInterface):
         self.sensors: dict[str, OpenCVMotionSensor] = {}
         self.motion_detection_running = False
 
-        # self.api.on(API_EVENT.FINISH_LAUNCHING, self.on_finish_launching)
         self.api.on(API_EVENT.SHUTDOWN, self.on_shutdown)
 
     async def on_shutdown(self) -> None:

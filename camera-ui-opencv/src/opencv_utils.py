@@ -27,9 +27,8 @@ def get_mask(
     return mask
 
 
-# fg_mask is binary only while the subtractors run detectShadows=False; with shadows on,
-# the 127 shadow pixels need a threshold gate here before they reach findContours
 def get_motion_mask(fg_mask: cv2.typing.MatLike) -> cv2.typing.MatLike:
+    # binary only with detectShadows=False, shadow pixels (127) would need a threshold here
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
     motion_mask = cv2.medianBlur(fg_mask, 3)

@@ -189,7 +189,7 @@ export class RingDoorbellTrigger extends DoorbellTrigger {
   }
 
   protected override onStart(): void {
-    // SDK auto-resets the doorbell trigger after a short delay
+    // the SDK resets the doorbell trigger itself after a short delay
     this.subscriptions.push(
       this.ringCamera.onDoorbellPressed.subscribe(() => {
         this.trigger();

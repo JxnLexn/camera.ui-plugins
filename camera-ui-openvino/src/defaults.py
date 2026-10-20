@@ -52,20 +52,14 @@ CLIP_TEXT_MODELS: dict[str, int] = {
 
 @dataclass(frozen=True)
 class FaceEmbedderSpec:
-    """How a recognition head wants its crop. The key it is stored under names
-    the vector space, which is what the NVR keys enrolled faces by, so it
-    changes whenever the preprocessing changes, not only the weights."""
-
     model: str
     size: int
     normalize: Normalize
     aligned: bool
 
 
+# the key names the vector space enrolled faces are stored under, it changes with the crop too
 FACE_EMBEDDERS: dict[str, FaceEmbedderSpec] = {
-    # the suffixes name the crop, not the weights: both heads see a padded face
-    # box now, where they used to get the detector's tight box, and that alone
-    # makes the vectors incomparable to the ones already stored
     "facenet-inceptionresnetv1-512-padded": FaceEmbedderSpec(
         "facenet-inceptionresnetv1-512", 160, "facenet", False
     ),
@@ -77,7 +71,6 @@ FACE_EMBEDDER_MODELS: list[str] = list(FACE_EMBEDDERS)
 FACE_LANDMARK_MODEL = "yunet-256-face-landmarks"
 FACE_LANDMARK_INPUT_SIZE = 256
 
-# the padded face crop the server sends; the landmark model takes it from there
 FACE_EMBEDDER_CROP_SIZE = 256
 
 PERSON_EMBEDDER_MODEL = "person-reid-256"
@@ -115,14 +108,12 @@ OCR_INPUT_HEIGHT = 64
 
 CLIP_EMBEDDING_DIM = 512
 
-# OpenVINO IR carries no class names; labels are hardcoded to the trained classes.
 OBJECT_LABELS: dict[int, DetectionLabel] = {0: "person", 1: "vehicle", 2: "animal"}
 
 OPENVINO_DEVICES = ["Default", "AUTO", "CPU", "GPU", "NPU"]
 DEFAULT_OPENVINO_DEVICE = "Default"
 
-# some IRs ship with dynamic dims, but the runtime always feeds exactly these
-# shapes (batch 1, fixed size); pinning them makes the models NPU-compilable
+# some IRs ship dynamic dims, pinning the shapes the runtime feeds anyway makes them NPU-compilable
 STATIC_INPUT_SHAPES: dict[str, list[list[int]]] = {
     **{spec.model: [[1, 3, spec.size, spec.size]] for spec in FACE_EMBEDDERS.values()},
     FACE_LANDMARK_MODEL: [[1, 3, FACE_LANDMARK_INPUT_SIZE, FACE_LANDMARK_INPUT_SIZE]],

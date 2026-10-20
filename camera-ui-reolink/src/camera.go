@@ -174,7 +174,6 @@ func (c *reolinkCamera) deactivate(b *bridge.Bridge) {
 	}
 }
 
-// cam returns the camera connection, or an error while the camera is disabled.
 func (c *reolinkCamera) cam() (*bridge.Camera, error) {
 	c.camMu.RLock()
 	defer c.camMu.RUnlock()
@@ -290,8 +289,7 @@ func (c *reolinkCamera) subscribeEvents(bridgeCam *bridge.Camera) {
 
 	bridgeCam.OnDoorbell(func() {
 		c.doorbellOnce.Do(func() {
-			// Fallback for cameras whose Support report missed the doorbell:
-			// add the sensor the first time a visitor press actually arrives.
+			// the Support report can miss the doorbell, the first press adds the sensor
 			sensor := sdk.NewDoorbellTrigger("Reolink Doorbell")
 			if err := c.dev.AddSensor(sensor); err != nil {
 				c.logger.Error("Failed to add doorbell sensor:", err)
@@ -343,8 +341,6 @@ func (c *reolinkCamera) subscribeEvents(bridgeCam *bridge.Camera) {
 	bridgeCam.OnConnection(c.handleConnection)
 }
 
-// loadAudioHints returns what earlier runs observed per stream profile, so a
-// known audio track is declared right away instead of being waited for.
 func (c *reolinkCamera) loadAudioHints() map[string]bridge.AudioHint {
 	raw, _ := c.dev.Storage().GetValue(storageKeyAudioHints).(string)
 	if raw == "" {
@@ -382,9 +378,7 @@ func (c *reolinkCamera) storeAudioHint(profile string, hint bridge.AudioHint) {
 }
 
 func (c *reolinkCamera) handleConnection(connected bool) {
-	// A dropped Baichuan session is routine: the camera often refuses a new
-	// login for a while, so a reconnect can take longer than it sounds. Only
-	// a camera that stays away this long is really offline.
+	// a dropped Baichuan session is routine and the camera refuses new logins for a while
 	const disconnectGrace = 30 * time.Second
 
 	c.connMu.Lock()
@@ -410,8 +404,7 @@ func (c *reolinkCamera) handleConnection(connected bool) {
 	gen := c.connGen
 	c.disconnectTimer = time.AfterFunc(disconnectGrace, func() {
 		c.connMu.Lock()
-		// A sleeping battery camera drops the connection by design — it is
-		// standby, not offline.
+		// a sleeping battery camera drops the connection by design, that is standby
 		stillReported := gen == c.connGen && c.connReported && !c.sleeping
 		if gen == c.connGen {
 			c.disconnectTimer = nil
@@ -449,9 +442,6 @@ func (c *reolinkCamera) reportObjects(event bridge.MotionEvent) {
 	c.objectSensor.ReportDetections(true, tracked)
 }
 
-// reportSounds forwards the AI types that describe a sound. The sensor is
-// created on the first one, because no capability bit tells us upfront whether
-// a camera can hear anything.
 func (c *reolinkCamera) reportSounds(event bridge.MotionEvent) {
 	detections := make([]sdk.Detection, 0, len(event.AITypes))
 	for _, aiType := range event.AITypes {
@@ -467,6 +457,7 @@ func (c *reolinkCamera) reportSounds(event bridge.MotionEvent) {
 		return
 	}
 
+	// no capability bit says whether a camera can hear, the first sound adds the sensor
 	c.audioOnce.Do(func() {
 		sensor := sdk.NewAudioSensor("Reolink Audio Detection")
 		if err := c.dev.AddSensor(sensor); err != nil {
@@ -480,7 +471,6 @@ func (c *reolinkCamera) reportSounds(event bridge.MotionEvent) {
 	}
 }
 
-// audioLabel maps a Reolink AI type to an audio detection label.
 func audioLabel(aiType string) (string, bool) {
 	if aiType == "cry" {
 		return "cry", true
@@ -488,8 +478,6 @@ func audioLabel(aiType string) (string, bool) {
 	return "", false
 }
 
-// objectLabel maps a Reolink AI type to a detection label, skipping the ones
-// that describe a sound rather than something visible in the frame.
 func objectLabel(aiType string) (string, bool) {
 	switch aiType {
 	case "people":
@@ -555,8 +543,7 @@ const (
 	storageKeyMainsPowered  = "mainsPowered"
 )
 
-// defaultLiveCatchUpSeconds matches the bridge default and is written for
-// cameras adopted before the setting existed.
+// the bridge default, written for cameras adopted before the setting existed
 const defaultLiveCatchUpSeconds = 3
 
 func liveCatchUpSchema(onSet func(newValue, oldValue any) any) sdk.JsonSchema {

@@ -209,7 +209,6 @@ class NCNNPlugin(
             except Exception:
                 self.object_detectors.pop(model_name, None)
                 raise
-            # ncnn .param has no embedded class names; inject the trained labels.
             detector.labels = {index: str(label) for index, label in OBJECT_LABELS.items()}
         else:
             await detector.initialize(model_name)
@@ -300,7 +299,7 @@ class NCNNPlugin(
     async def get_plate_detector(self, model_name: str) -> BoxDetector:
         detector = self.plate_detectors.get(model_name)
         if not detector:
-            # Plate graph is cut at the raw YOLOv9 head (no end2end NMS), so apply NMS.
+            # the plate graph ends at the raw YOLOv9 head, no in-graph NMS
             detector = BoxDetector(
                 self.model_manager,
                 self.logger,
@@ -548,8 +547,7 @@ class NCNNPlugin(
         if not embedder.initialized or not landmarker.initialized:
             return [None for _ in images]
 
-        # an empty vector says the picture holds no face the model can use, None
-        # is reserved for a plugin that could not run: the caller drops the first
+        # empty vector: no usable face, the caller drops it; None: the plugin could not run
         results = await embed_face_images(landmarker, embedder, images, space, landmarks)
         return [result for result in results]
 

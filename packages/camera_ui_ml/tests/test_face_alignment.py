@@ -61,8 +61,6 @@ def test_ignores_faces_below_the_threshold():
 
 
 def test_warps_the_landmarks_onto_the_template():
-    # a face rotated and shifted in its crop: after the warp the five points
-    # must sit on the canonical template, whatever the crop looked like
     angle = np.deg2rad(20.0)
     rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
     source = (ARCFACE_DST_112 * 1.6) @ rotation.T + np.array([40.0, 25.0])

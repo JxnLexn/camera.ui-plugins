@@ -41,9 +41,9 @@ class NcnnBackend(InferenceBackend):
         return self._device
 
     def adapt(self, image: NDArray, spec: InputSpec) -> Sequence[Any]:
-        # to_tensor yields a batched tensor; ncnn wants a single float32 Mat (no batch).
+        # ncnn wants one float32 Mat without the batch dim
         tensor = np.ascontiguousarray(to_tensor(image, spec)[0].astype(np.float32))
-        # a Mat only points at the array's memory, the array rides along until the extractor ran
+        # a Mat only points at the array's memory, keep the array alive until the extractor ran
         return [(ncnn.Mat(tensor), tensor)]
 
     async def infer(self, inputs: Sequence[Any]) -> Outputs:

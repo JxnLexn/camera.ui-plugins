@@ -10,7 +10,7 @@ YAMNET_LABELS_URL = "https://models.cameraui.com/v1/audio-yamnet/yamnet_class_ma
 YAMNET_SAMPLE_RATE = 16000
 YAMNET_CHANNELS = 1
 YAMNET_FORMAT: Literal["pcm16", "float32"] = "float32"
-YAMNET_SAMPLES_PER_FRAME = 15600  # 0.975s at 16kHz — YAMNet's fixed input window
+YAMNET_SAMPLES_PER_FRAME = 15600  # 0.975s at 16kHz, YAMNet's fixed input window
 
 DEFAULT_LISTEN_LABELS: list[str] = list(BASE_AUDIO_LABELS)
 

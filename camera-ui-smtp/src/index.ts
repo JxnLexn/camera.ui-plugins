@@ -21,7 +21,6 @@ export default class SMTPPlugin extends BasePlugin<StorageValues> {
   constructor(logger: LoggerService, api: PluginAPI, storage: DeviceStorage<StorageValues>) {
     super(logger, api, storage);
 
-    // this.api.on(API_EVENT.FINISH_LAUNCHING, this.start.bind(this));
     this.api.on(API_EVENT.SHUTDOWN, this.stop.bind(this));
 
     this.createSMTPServer();
