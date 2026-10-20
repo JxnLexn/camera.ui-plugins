@@ -70,7 +70,7 @@ export class RecordingSession extends EventEmitter {
     private cameraAccessory: CameraAccessory,
     private cameraDevice: CameraDevice,
     private logger: LoggerService,
-    private options: RecordingSessionOptions = { logPrefix: '[HKSV]', audio: { codec: 'aac' } },
+    private options: RecordingSessionOptions,
   ) {
     super();
     this.logPrefix = options.logPrefix;
@@ -362,7 +362,7 @@ export class RecordingSession extends EventEmitter {
       supportedVideoCodecs: this.cameraAccessory.secureVideoCodec === 'hevc' ? ['h264', 'hevc'] : ['h264'],
       supportedAudioCodecs: [this.options.audio.codec],
       boxMode: true,
-      fragDuration: (this.configuration?.mediaContainerConfiguration?.fragmentLength ?? 4000) * 1000,
+      fragDuration: this.fragmentLength() * 1000,
       hardware: this.cameraAccessory.cameraStorage.values.useHardwareAccelerationForRecording ? 'auto' : undefined,
       video: {
         width: this.configuration?.videoCodec.resolution[0],
@@ -389,22 +389,24 @@ export class RecordingSession extends EventEmitter {
       })
       .catch(() => undefined);
 
-    void (async () => {
-      try {
-        for await (const box of session.streamBoxes(abort.signal)) {
-          this.pushBox(box);
-        }
-      } catch (error) {
-        if (!abort.signal.aborted) {
-          this.logger.error(this.logPrefix, 'Prebuffer collection error:', error);
-        }
-      } finally {
-        if (this.collectAbort === abort) {
-          this.collectAbort = undefined;
-          await this.handleSessionLost(session);
-        }
+    this.collectBoxes(session, abort);
+  }
+
+  private async collectBoxes(session: Fmp4Session, abort: AbortController): Promise<void> {
+    try {
+      for await (const box of session.streamBoxes(abort.signal)) {
+        this.pushBox(box);
       }
-    })();
+    } catch (error) {
+      if (!abort.signal.aborted) {
+        this.logger.error(this.logPrefix, 'Prebuffer collection error:', error);
+      }
+    } finally {
+      if (this.collectAbort === abort) {
+        this.collectAbort = undefined;
+        await this.handleSessionLost(session);
+      }
+    }
   }
 
   private handleSessionLost(session: Fmp4Session): Promise<void> {
@@ -512,17 +514,24 @@ export class RecordingSession extends EventEmitter {
     return this.fragmentEnd(fragment) - this.durationOf(fragment);
   }
 
+  private prebufferLength(): number {
+    return this.configuration?.prebufferLength ?? 4000;
+  }
+
   private prebufferWindow(): number {
-    return Math.max(this.configuration?.prebufferLength ?? 4000, this.options.minPrebuffer ?? 0);
+    return Math.max(this.prebufferLength(), this.options.minPrebuffer ?? 0);
   }
 
   private hubPrebuffer(): Buffer[] {
-    const oldest = Date.now() - (this.configuration?.prebufferLength ?? 4000);
+    return this.prebuffer.slice(this.firstFragmentCovering(Date.now() - this.prebufferLength()));
+  }
+
+  private firstFragmentCovering(since: number): number {
     let first = 0;
-    while (first < this.prebuffer.length - 1 && this.fragmentStart(this.prebuffer[first + 1]) <= oldest) {
+    while (first < this.prebuffer.length - 1 && this.fragmentStart(this.prebuffer[first + 1]) <= since) {
       first++;
     }
-    return this.prebuffer.slice(first);
+    return first;
   }
 
   private async *liveFragments(consumer: LiveConsumer, signal?: AbortSignal): AsyncGenerator<Buffer, void> {
@@ -588,10 +597,7 @@ export class RecordingSession extends EventEmitter {
     this.fragmentTimes.set(box, { end: this.lastDeliveryAt, duration: duration ?? this.fragmentLength() });
 
     this.prebuffer.push(box);
-    const oldest = this.lastDeliveryAt - this.prebufferWindow();
-    while (this.prebuffer.length > 1 && this.fragmentStart(this.prebuffer[1]) <= oldest) {
-      this.prebuffer.shift();
-    }
+    this.prebuffer.splice(0, this.firstFragmentCovering(this.lastDeliveryAt - this.prebufferWindow()));
 
     for (const consumer of this.consumers) {
       if (consumer.resolve) {

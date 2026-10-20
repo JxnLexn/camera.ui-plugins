@@ -37,13 +37,10 @@ export class PluginHapStorage implements HAPStorageBackend {
   }
 
   public removeItemSync(key: string): void {
-    if (!(key in this.persisted)) {
-      this.items.delete(key);
-      return;
+    if (key in this.persisted) {
+      const { [key]: _removed, ...rest } = this.persisted;
+      this.write(rest);
     }
-
-    const { [key]: _removed, ...rest } = this.persisted;
-    this.write(rest);
     this.items.delete(key);
   }
 

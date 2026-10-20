@@ -15,6 +15,7 @@ export interface CameraStorageValues {
   useHardwareAcceleration: boolean;
   useHardwareAccelerationForRecording: boolean;
   forceLegacyPath: boolean;
+  allowTranscodingForMobileData: boolean;
   advertiser: string;
   seenInstanceId?: string;
 }

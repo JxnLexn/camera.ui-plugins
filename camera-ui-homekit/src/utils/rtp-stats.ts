@@ -1,4 +1,4 @@
-import type { RtpPacket } from 'werift';
+import type { RtcpReceiverInfo, RtpPacket } from 'werift';
 
 export interface RtpSenderState {
   timestamp: number;
@@ -54,6 +54,29 @@ export interface RtcpReceiverStats {
 
 export function createReceiverStats(): RtcpReceiverStats {
   return { rrCount: 0, packetsLost: 0, fractionLostMax: 0, jitterSum: 0, jitterMax: 0, jitterCount: 0, rttSumMs: 0, rttMaxMs: 0, rttCount: 0, pliCount: 0 };
+}
+
+export function cumulativePacketsLost(report: RtcpReceiverInfo): number {
+  // signed 24-bit field, duplicated packets push it below zero
+  return (report.packetsLost << 8) >> 8;
+}
+
+export function recordReceiverReport(stats: RtcpReceiverStats, report: RtcpReceiverInfo): void {
+  stats.rrCount++;
+  stats.packetsLost = Math.max(stats.packetsLost, cumulativePacketsLost(report));
+  stats.fractionLostMax = Math.max(stats.fractionLostMax, report.fractionLost);
+  stats.jitterSum += report.jitter;
+  stats.jitterCount++;
+  stats.jitterMax = Math.max(stats.jitterMax, report.jitter);
+
+  if (report.lsr > 0) {
+    const rttMs = (((ntpMiddle32(Date.now()) - report.lsr - report.dlsr) >>> 0) / 65536) * 1000;
+    if (rttMs >= 0 && rttMs < 10_000) {
+      stats.rttSumMs += rttMs;
+      stats.rttCount++;
+      stats.rttMaxMs = Math.max(stats.rttMaxMs, rttMs);
+    }
+  }
 }
 
 export interface SenderRateInfo {

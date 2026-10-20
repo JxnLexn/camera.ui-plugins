@@ -4,6 +4,8 @@ export type SecureVideoCodec = 'h264' | 'hevc';
 
 const HEVC_NAL_AP = 48;
 const HEVC_NAL_FU = 49;
+const HEVC_NAL_IRAP_FIRST = 16;
+const HEVC_NAL_IRAP_LAST = 23;
 const H264_NAL_STAP_A = 24;
 const H264_NAL_FU_A = 28;
 
@@ -18,6 +20,18 @@ export interface AccessUnit {
 
 export interface AccessUnitAssembler {
   push(packet: RtpPacket): AccessUnit | undefined;
+}
+
+export function isHevcKeyframe(accessUnit: Buffer): boolean {
+  let offset = 0;
+  while (offset + 5 <= accessUnit.length) {
+    const type = (accessUnit[offset + 4] >> 1) & 0x3f;
+    if (type >= HEVC_NAL_IRAP_FIRST && type <= HEVC_NAL_IRAP_LAST) {
+      return true;
+    }
+    offset += 4 + accessUnit.readUInt32BE(offset);
+  }
+  return false;
 }
 
 export function createAccessUnitAssembler(codec: SecureVideoCodec): AccessUnitAssembler {

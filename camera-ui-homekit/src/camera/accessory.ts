@@ -384,6 +384,47 @@ export class CameraAccessory extends Subscribed {
         },
       },
       {
+        type: 'button',
+        title: 'Reset Pairing',
+        key: 'reset',
+        group: 'Pairing',
+        description: 'Unpair and generate a new pairing code.',
+        color: 'danger',
+        onSet: async () => {
+          this.cameraLogger.log('Reset pairing...');
+          await this.cameraStorage.setValue('republishId', randomBytes(8).toString('hex'));
+          await this.cameraStorage.setValue('accessoryPin', mac.randomPinCode());
+          await this.republishAccessory(true);
+        },
+      },
+      {
+        type: 'boolean',
+        key: 'forceLegacyPath',
+        title: 'Force legacy path',
+        description: 'Always use the classic HomeKit camera services instead of Secure Video (HKSV3). For homes that stay on iOS 26 or older.',
+        group: 'Secure Video',
+        defaultValue: false,
+        store: true,
+        onSet: async (state: boolean) => {
+          this.cameraLogger.log('Force legacy path:', state);
+          await this.republishAccessory();
+        },
+      },
+      {
+        type: 'boolean',
+        key: 'allowTranscodingForMobileData',
+        title: 'Allow transcoding for mobile data',
+        description:
+          'Remote view over LTE needs a small HEVC stream. A low or mid resolution source that is not HEVC is transcoded for it, an HEVC source is always sent as it is.',
+        group: 'Secure Video',
+        condition: { key: 'forceLegacyPath', value: false },
+        defaultValue: true,
+        store: true,
+        onSet: async (state: boolean) => {
+          this.cameraLogger.log('Allow transcoding for mobile data:', state);
+        },
+      },
+      {
         type: 'number',
         key: 'accessoryPort',
         title: 'Port',
@@ -446,37 +487,10 @@ export class CameraAccessory extends Subscribed {
         defaultValue: '',
       },
       {
-        type: 'button',
-        title: 'Reset Pairing',
-        key: 'reset',
-        group: 'Reset',
-        description: 'Unpair and generate a new pairing code.',
-        color: 'danger',
-        onSet: async () => {
-          this.cameraLogger.log('Reset pairing...');
-          await this.cameraStorage.setValue('republishId', randomBytes(8).toString('hex'));
-          await this.cameraStorage.setValue('accessoryPin', mac.randomPinCode());
-          await this.republishAccessory(true);
-        },
-      },
-      {
-        type: 'boolean',
-        key: 'forceLegacyPath',
-        title: 'Force legacy path',
-        description: 'Always use the classic HomeKit camera services instead of Secure Video (HKSV3). For homes that stay on iOS 26 or older.',
-        group: 'Advanced',
-        defaultValue: false,
-        store: true,
-        onSet: async (state: boolean) => {
-          this.cameraLogger.log('Force legacy path:', state);
-          await this.republishAccessory();
-        },
-      },
-      {
         type: 'boolean',
         key: 'useHardwareAcceleration',
         title: 'Use Hardware Acceleration',
-        description: 'Use the GPU to transcode streams.',
+        description: 'When a live stream has to be transcoded, use the GPU for it if one is available. Streams HomeKit can play as they are go out without transcoding.',
         group: 'Advanced',
         defaultValue: true,
         store: true,
@@ -488,7 +502,8 @@ export class CameraAccessory extends Subscribed {
         type: 'boolean',
         key: 'useHardwareAccelerationForRecording',
         title: 'Use Hardware Acceleration for HKSV',
-        description: 'Use the GPU for HomeKit Secure Video recording. Disable this per camera if its decoder is unstable.',
+        description:
+          'When a HomeKit Secure Video recording has to be transcoded, use the GPU for it if one is available. Turn it off for a camera whose recordings break up.',
         group: 'Advanced',
         defaultValue: true,
         store: true,

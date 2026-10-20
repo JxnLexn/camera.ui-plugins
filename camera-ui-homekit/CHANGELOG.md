@@ -7,6 +7,7 @@
 - **A copy of the server gets new pairings.** After a backup is restored as a copy, the bridge and the cameras get new pairing codes there, so they no longer answer for the original. Add them to Home again on the copy. A move keeps the pairings.
 - **The pairing code in the settings works.** A camera or bridge that had no saved code showed a different one on every start, and the code in the settings did not match the one Home expected. Scanning the QR code worked, typing the code did not.
 - **HomeKit Secure Video records again after the camera stream got stuck.** The plugin restarts a recording stream that sends nothing for about 25 seconds.
+- **Remote live view works over mobile data.** On iOS 27 the Home app stopped the stream right after it started when the iPhone was on 5G or LTE, only Wi-Fi worked. Cameras with a low or mid resolution source also send a small stream from it for slow connections, transcoded only when that source is not HEVC. The new setting **Allow transcoding for mobile data** under **Secure Video**, next to **Force legacy path**, turns the transcoding off.
 - **MJPEG cameras work in Home.** Cameras that send neither H.264 nor H.265 were treated as H.265 and only worked on iOS 27. They now get an H.264 stream, transcoded on the server.
 - Bump camera.ui engine and SDK
 

@@ -17,7 +17,7 @@ import { AudioStreamingCodecType, SRTPCryptoSuites } from '../hap.js';
 
 import { placeholderImageFor } from '../utils/placeholder.js';
 import { RtpSplitter } from '../utils/rtp-splitter.js';
-import { createReceiverStats, ntpMiddle32, ntpTimestamp, recordRtpPacket, summarizeReceiverStats } from '../utils/rtp-stats.js';
+import { createReceiverStats, cumulativePacketsLost, ntpTimestamp, recordReceiverReport, recordRtpPacket, summarizeReceiverStats } from '../utils/rtp-stats.js';
 import { generateSrtpOptions, generateSsrc, getSessionConfig } from '../utils/srtp.js';
 import { getDurationSeconds } from '../utils/utils.js';
 
@@ -557,26 +557,13 @@ export class StreamingSession {
       for (const packet of packets) {
         if (packet instanceof RtcpRrPacket) {
           for (const report of packet.reports) {
-            stats.rrCount++;
-            stats.packetsLost = Math.max(stats.packetsLost, report.packetsLost);
-            stats.fractionLostMax = Math.max(stats.fractionLostMax, report.fractionLost);
-            stats.jitterSum += report.jitter;
-            stats.jitterCount++;
-            stats.jitterMax = Math.max(stats.jitterMax, report.jitter);
+            recordReceiverReport(stats, report);
 
-            if (report.lsr > 0) {
-              const rttMs = (((ntpMiddle32(Date.now()) - report.lsr - report.dlsr) >>> 0) / 65536) * 1000;
-              if (rttMs >= 0 && rttMs < 10_000) {
-                stats.rttSumMs += rttMs;
-                stats.rttCount++;
-                stats.rttMaxMs = Math.max(stats.rttMaxMs, rttMs);
-              }
-            }
-
-            if (kind === 'video' && report.packetsLost > this.lastPacketLoss) {
-              this.lastPacketLoss = report.packetsLost;
+            const packetsLost = cumulativePacketsLost(report);
+            if (kind === 'video' && packetsLost > this.lastPacketLoss) {
+              this.lastPacketLoss = packetsLost;
               const jitterMs = Math.round((report.jitter / clockRate) * 1000);
-              this.cameraLogger.debug(`Increased packet loss detected: Total Lost=${report.packetsLost}, Highest Seq=${report.highestSequence}, Jitter=${jitterMs}ms`);
+              this.cameraLogger.debug(`Increased packet loss detected: Total Lost=${packetsLost}, Highest Seq=${report.highestSequence}, Jitter=${jitterMs}ms`);
             }
           }
         } else if (packet instanceof RtcpPayloadSpecificFeedback) {
