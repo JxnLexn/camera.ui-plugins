@@ -31,6 +31,7 @@ const DETECTION_HOLD_MS = 10_000;
 const SIREN_SECONDS = 30;
 const PTZ_STEP_INTERVAL_MS = 600;
 const ALARM_HOLD_MS = 15 * 60_000;
+const LOCK_SETTLE_MS = 4000; // a lock reports its new state about 1.5 s after the command
 const ALARM_STOP_TYPES = new Set([0, 1, 15, 16, 17]);
 
 const ARMING_STATES: Record<number, SecuritySystemState> = {
@@ -358,6 +359,8 @@ export class EufyContactSensor extends ContactSensor implements BindableSensor {
 }
 
 export class EufyLockControl extends LockControl implements BindableSensor {
+  private refreshTimer?: NodeJS.Timeout;
+
   constructor(
     public device: Device | undefined,
     private readonly logger: LoggerService,
@@ -368,7 +371,44 @@ export class EufyLockControl extends LockControl implements BindableSensor {
   }
 
   public sync(): void {
-    const locked = this.device?.lock?.()?.locked;
+    this.show(this.device?.lock?.()?.locked);
+  }
+
+  public async refresh(): Promise<void> {
+    const lock = this.device?.lock?.();
+    if (!lock?.refreshStatus) return;
+    try {
+      const locked = await lock.refreshStatus();
+      this.show(locked ?? this.device?.lock?.()?.locked);
+    } catch (error) {
+      this.logger.warn(`Could not read the state of ${this.displayName}: ${errorMessage(error)}`);
+    }
+  }
+
+  public override async setTargetState(value: LockState): Promise<void> {
+    if (value === LockState.Unknown) return;
+    await runCommand(this.logger, value === LockState.Secured ? 'lock' : 'unlock', async () => {
+      const lock = required(this.device?.lock?.(), this.displayName);
+      await required(value === LockState.Secured ? lock.lock?.() : lock.unlock?.(), this.displayName);
+      await super.setTargetState(value);
+      // a lock that did not turn reports no new state
+      clearTimeout(this.refreshTimer);
+      this.refreshTimer = setTimeout(() => {
+        this.refresh();
+      }, LOCK_SETTLE_MS);
+    });
+  }
+
+  protected override onStart(): void {
+    this.sync();
+  }
+
+  protected override onStop(): void {
+    clearTimeout(this.refreshTimer);
+    this.refreshTimer = undefined;
+  }
+
+  private show(locked: boolean | undefined): void {
     if (locked === undefined) {
       this.setCurrentState(LockState.Unknown);
       return;
@@ -379,19 +419,6 @@ export class EufyLockControl extends LockControl implements BindableSensor {
     } else {
       super.setTargetState(state);
     }
-  }
-
-  public override async setTargetState(value: LockState): Promise<void> {
-    if (value === LockState.Unknown) return;
-    await runCommand(this.logger, value === LockState.Secured ? 'lock' : 'unlock', async () => {
-      const lock = required(this.device?.lock?.(), this.displayName);
-      await (value === LockState.Secured ? lock.lock() : lock.unlock());
-      await super.setTargetState(value);
-    });
-  }
-
-  protected override onStart(): void {
-    this.sync();
   }
 }
 

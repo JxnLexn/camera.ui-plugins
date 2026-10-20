@@ -12,13 +12,14 @@
 - **More devices work as in the Eufy app.** The siren of a HomeBase 3 can be triggered, the Video Doorbell Dual T8213 rings as a doorbell, the PoE S4 behind its recorder shows up as a camera, and a Video Doorbell Dual behind a HomeBase shows the split picture instead of a small inset. The Video Doorbell T8210C rings as well, the Baby Monitor E21 can pan and tilt, and the spotlight of an eufyCam E330 Pro can be switched.
 - **An Indoor Cam Pan & Tilt behind a HomeBase can be turned on and off**, and its switch shows the right state. Before, "on" could turn it off. An Indoor Cam S350 behind a HomeBase can be turned on and off too.
 - **The plugin stays logged in to Eufy when it moves to a worker and back**, instead of asking for a new verification code.
-- **Some cameras no longer log the same warning about their motion sensitivity every ten minutes.**
+- **Some cameras no longer log the same warning about their motion sensitivity or AI detection every ten minutes.**
 - **Stopping an alarm in the Eufy app ends it in camera.ui right away.** The guard mode kept showing the alarm for up to 15 minutes.
 - **No new verification code every 30 minutes.** When Eufy asked for a verification code, the plugin tried to log in again every 30 minutes, and Eufy sent a new code each time.
 - **The SoloCam S220 no longer shows pan and tilt controls** it does not have.
 - **The Smoke Alarm E10 shows up as a smoke sensor** instead of a camera.
 - **The guard mode of an Indoor Cam T8410C can be changed.** Every change failed before.
 - **Changing the country in the plugin settings logs in again.** The plugin kept the session of the old country, a verification code may be asked for.
+- **The Video Smart Lock S330 behind a HomeBase 3 locks and unlocks.** It refused every command before. When the lock does not turn, camera.ui shows its real state again after a few seconds.
 - Bump camera.ui engine and SDK
 
 ## [2.0.4]

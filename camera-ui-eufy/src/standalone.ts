@@ -41,7 +41,9 @@ export class StandaloneSensor {
   public bind(device: Device | undefined): void {
     if (!(this.sensor instanceof EufyMotionSensor)) this.sensor.device = device;
     this.sensor.setSourceState(device ? 'connected' : 'unavailable');
-    if (device) this.sync();
+    if (!device) return;
+    this.sync();
+    if (this.sensor instanceof EufyLockControl) this.sensor.refresh();
   }
 
   public markRemoved(): void {
