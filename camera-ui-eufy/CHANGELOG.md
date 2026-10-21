@@ -9,6 +9,7 @@
 - **Cameras behind a HomeBase 2 show the picture of their latest event**, also when the event arrives before its picture. Some pictures that stayed empty show up now too.
 - **Cameras behind a HomeBase S1 Pro (T9000) show a live view**, one camera at a time and without sound, on a 64-bit system. The siren of more cameras behind it can be triggered, among them the SoloCam S220 and L20, eufyCam 2C, Video Doorbell Dual and Indoor Cam. These cameras no longer offer RTSP, which never worked there.
 - **The Video Doorbell C31 shows a live view**, without sound and on a 64-bit system.
+- **PoE cameras behind their recorder show a live view with sound**, among them the PoE S4 and E40, on a 64-bit system.
 - **More devices work as in the Eufy app.** The siren of a HomeBase 3 can be triggered, the Video Doorbell Dual T8213 rings as a doorbell, the PoE S4 behind its recorder shows up as a camera, and a Video Doorbell Dual behind a HomeBase shows the split picture instead of a small inset. The Video Doorbell T8210C rings as well, the Baby Monitor E21 can pan and tilt, and the spotlight of an eufyCam E330 Pro can be switched.
 - **An Indoor Cam Pan & Tilt behind a HomeBase can be turned on and off**, and its switch shows the right state. Before, "on" could turn it off. An Indoor Cam S350 behind a HomeBase can be turned on and off too.
 - **The plugin stays logged in to Eufy when it moves to a worker and back**, instead of asking for a new verification code.
