@@ -1,6 +1,12 @@
 ## [1.2.27]
 
 - **Battery cameras and doorbells are recognized when you add them.** camera.ui then sets up a battery camera so it can sleep. Needs camera.ui 2.4.0.
+- **Cameras without a speaker no longer offer two-way audio.** The talk button did nothing on them. Cameras you already added are checked the next time they connect, the button goes away with the next stream start.
+- **Two-way audio no longer crackles or cuts off the end of a sentence.** A camera that refuses to talk keeps its live view instead of reconnecting.
+- **Fewer stream drops.** Models that refuse the event subscription, such as the Elite Floodlight WiFi, no longer reconnect every few seconds. A stream the camera turns down right after connecting is back within seconds instead of five minutes.
+- **A camera that goes silent is noticed sooner.** Over its UID it reconnects or shows as offline within a minute instead of after about eight, and a camera that stops answering during login no longer blocks its snapshots and controls.
+- **Account devices are named as such.** Adding a camera that is set up as a Reolink account device now says it has to be reset to a local device, instead of showing a login error.
+- **No second full-size stream.** If a camera's sub stream is only a copy of its main stream, it is no longer added as a low-resolution source.
 - Bump camera.ui engine and SDK
 
 ## [1.2.26]

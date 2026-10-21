@@ -13,7 +13,10 @@ import (
 	"github.com/shareed2k/reolinkproxy/pkg/bridge"
 )
 
-const snapshotTimeout = 15 * time.Second
+const (
+	snapshotTimeout     = 15 * time.Second
+	capabilitiesTimeout = 15 * time.Second
+)
 
 type reolinkCamera struct {
 	dev      *sdk.CameraDevice
@@ -22,6 +25,8 @@ type reolinkCamera struct {
 
 	bridge       *bridge.Bridge
 	mainsPowered atomic.Bool
+	hasTalk      atomic.Bool
+	talkOnce     sync.Once
 
 	activeMu  sync.Mutex
 	camMu     sync.RWMutex
@@ -83,6 +88,7 @@ func (p *ReolinkPlugin) initializeCamera(dev *sdk.CameraDevice) {
 func (c *reolinkCamera) initialize(b *bridge.Bridge) error {
 	c.bridge = b
 	c.mainsPowered.Store(c.settings.MainsPowered)
+	c.hasTalk.Store(c.settings.HasTalk)
 	c.watchMainsPowered()
 	if err := c.dev.Implement(&cameraImplementation{cam: c}); err != nil {
 		return err
@@ -395,6 +401,8 @@ func (c *reolinkCamera) handleConnection(connected bool) {
 			c.connReported = true
 			go func() { _ = c.dev.Connect() }()
 		}
+		// the stored flag can still be the schema default, the camera's own answer wins
+		c.talkOnce.Do(func() { go c.refreshTalk() })
 		return
 	}
 
@@ -417,6 +425,31 @@ func (c *reolinkCamera) handleConnection(connected bool) {
 			_ = c.dev.Disconnect()
 		}
 	})
+}
+
+func (c *reolinkCamera) refreshTalk() {
+	cam, err := c.cam()
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), capabilitiesTimeout)
+	defer cancel()
+	caps, err := cam.Capabilities(ctx)
+	if err != nil {
+		c.logger.Warn("Failed to read whether the camera has a speaker:", err)
+		return
+	}
+	if c.hasTalk.Swap(caps.Talk) == caps.Talk {
+		return
+	}
+	if err := c.dev.Storage().SetValue(storageKeyHasTalk, caps.Talk); err != nil {
+		c.logger.Warn("Failed to persist two-way audio support:", err)
+	}
+	if caps.Talk {
+		c.logger.Log("Camera has a speaker, two-way audio is available from the next stream start")
+	} else {
+		c.logger.Log("Camera has no speaker, two-way audio is off from the next stream start")
+	}
 }
 
 func (c *reolinkCamera) reportObjects(event bridge.MotionEvent) {
@@ -509,6 +542,9 @@ func (i *cameraImplementation) StreamUrl(sourceID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if !i.cam.hasTalk.Load() {
+		return cam.StreamURL(source.Name()), nil
+	}
 	return cam.TwoWayURL(source.Name()), nil
 }
 
@@ -531,6 +567,7 @@ const (
 	storageKeyBatteryCamera = "batteryCamera"
 	storageKeyHasSiren      = "hasSiren"
 	storageKeyHasSpotlight  = "hasSpotlight"
+	storageKeyHasTalk       = "hasTalk"
 	storageKeyHasPTZ        = "hasPTZ"
 	storageKeyPTZPan        = "ptzPan"
 	storageKeyPTZTilt       = "ptzTilt"
@@ -640,6 +677,14 @@ func ensureStorageSchemas(storage *sdk.DeviceStorage) {
 			Store:  &storeTrue,
 		},
 		{
+			Type:         sdk.JsonSchemaTypeBoolean,
+			Key:          storageKeyHasTalk,
+			Title:        "Two-Way Audio",
+			DefaultValue: true,
+			Hidden:       true,
+			Store:        &storeTrue,
+		},
+		{
 			Type:   sdk.JsonSchemaTypeBoolean,
 			Key:    storageKeyHasPTZ,
 			Title:  "PTZ",
@@ -704,6 +749,7 @@ func persistSettings(storage *sdk.DeviceStorage, settings cameraSettings) error 
 		storageKeyBatteryCamera: settings.BatteryCamera,
 		storageKeyHasSiren:      settings.HasSiren,
 		storageKeyHasSpotlight:  settings.HasSpotlight,
+		storageKeyHasTalk:       settings.HasTalk,
 		storageKeyHasPTZ:        settings.HasPTZ,
 		storageKeyPTZPan:        settings.PTZPan,
 		storageKeyPTZTilt:       settings.PTZTilt,
@@ -732,6 +778,7 @@ func loadSettings(storage *sdk.DeviceStorage) cameraSettings {
 		BatteryCamera: boolValue(storage, storageKeyBatteryCamera),
 		HasSiren:      boolValue(storage, storageKeyHasSiren),
 		HasSpotlight:  boolValue(storage, storageKeyHasSpotlight),
+		HasTalk:       boolValue(storage, storageKeyHasTalk),
 		HasPTZ:        boolValue(storage, storageKeyHasPTZ),
 		PTZPan:        boolValue(storage, storageKeyPTZPan),
 		PTZTilt:       boolValue(storage, storageKeyPTZTilt),

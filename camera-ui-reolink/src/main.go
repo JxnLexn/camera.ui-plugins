@@ -69,6 +69,7 @@ type cameraSettings struct {
 	BatteryCamera      bool
 	HasSiren           bool
 	HasSpotlight       bool
+	HasTalk            bool
 	HasPTZ             bool
 	PTZPan             bool
 	PTZTilt            bool
@@ -564,6 +565,7 @@ func (p *ReolinkPlugin) OnAdoptCamera(camera sdk.DiscoveredCamera, settings map[
 		BatteryCamera: probe.caps.Battery,
 		HasSiren:      probe.caps.Siren,
 		HasSpotlight:  probe.caps.Floodlight,
+		HasTalk:       probe.caps.Talk,
 		HasPTZ:        probe.caps.PTZ,
 		PTZPan:        probe.caps.Pan,
 		PTZTilt:       probe.caps.Tilt,
@@ -573,8 +575,8 @@ func (p *ReolinkPlugin) OnAdoptCamera(camera sdk.DiscoveredCamera, settings map[
 
 		LiveCatchUpSeconds: defaultLiveCatchUpSeconds,
 	}
-	p.Logger.Log(fmt.Sprintf("Detected capabilities for %s: streams=%v battery=%t siren=%t spotlight=%t ptz=%t doorbell=%t ai=%v",
-		camera.Name, probe.streams, probe.caps.Battery, probe.caps.Siren, probe.caps.Floodlight, probe.caps.PTZ, probe.caps.Doorbell, probe.caps.AITypes))
+	p.Logger.Log(fmt.Sprintf("Detected capabilities for %s: streams=%v battery=%t siren=%t spotlight=%t talk=%t ptz=%t doorbell=%t ai=%v",
+		camera.Name, probe.streams, probe.caps.Battery, probe.caps.Siren, probe.caps.Floodlight, probe.caps.Talk, probe.caps.PTZ, probe.caps.Doorbell, probe.caps.AITypes))
 
 	p.mu.Lock()
 	p.pendingSettings[camera.ID] = camSettings
