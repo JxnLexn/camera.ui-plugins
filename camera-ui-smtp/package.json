@@ -20,8 +20,8 @@
     "update": "updates -M npm,pypi,go,cargo,docker,make --update ./"
   },
   "dependencies": {
-    "mailparser": "^3.12.2",
-    "smtp-server": "^3.21.0"
+    "mailparser": "^3.12.4",
+    "smtp-server": "^3.21.1"
   },
   "devDependencies": {
     "@camera.ui/cli": "^0.0.118",
