@@ -1,4 +1,4 @@
-## [1.3.1]
+## [1.4.0]
 
 - **Detections finish much sooner under load.** With many cameras detecting at once, the slowest ones take about a seventh of the time they did.
 - **Changing the Compute Units or downloading the models again also reloads the face landmark model.** It kept running on the old setting until the plugin restarted.

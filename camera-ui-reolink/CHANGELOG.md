@@ -1,4 +1,4 @@
-## [1.2.27]
+## [1.3.0]
 
 - **Battery cameras and doorbells are recognized when you add them**, also doorbells on an NVR or Home Hub. camera.ui then sets up a battery camera so it can sleep. Needs camera.ui 2.4.0.
 - **A camera that answers late while you add it keeps its features.** Adding it now fails and can be retried, instead of setting it up as mains-powered without siren, spotlight or PTZ.
