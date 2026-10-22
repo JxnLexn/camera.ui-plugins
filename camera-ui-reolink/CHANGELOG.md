@@ -1,12 +1,18 @@
 ## [1.2.27]
 
-- **Battery cameras and doorbells are recognized when you add them.** camera.ui then sets up a battery camera so it can sleep. Needs camera.ui 2.4.0.
+- **Battery cameras and doorbells are recognized when you add them**, also doorbells on an NVR or Home Hub. camera.ui then sets up a battery camera so it can sleep. Needs camera.ui 2.4.0.
+- **A camera that answers late while you add it keeps its features.** Adding it now fails and can be retried, instead of setting it up as mains-powered without siren, spotlight or PTZ.
+- **Cameras on an NVR or Home Hub show their own model, serial number and firmware** instead of the recorder's. This applies to cameras you add from now on.
 - **Cameras without a speaker no longer offer two-way audio.** The talk button did nothing on them. Cameras you already added are checked the next time they connect, the button goes away with the next stream start.
-- **Two-way audio no longer crackles or cuts off the end of a sentence.** A camera that refuses to talk keeps its live view instead of reconnecting.
+- **Two-way audio no longer crackles or cuts off the end of a sentence.** A camera that refuses to talk keeps its live view, and the plugin asks it again after a few seconds instead of many times a second.
 - **Fewer stream drops.** Models that refuse the event subscription, such as the Elite Floodlight WiFi, no longer reconnect every few seconds. A stream the camera turns down right after connecting is back within seconds instead of five minutes.
 - **A camera that goes silent is noticed sooner.** Over its UID it reconnects or shows as offline within a minute instead of after about eight, and a camera that stops answering during login no longer blocks its snapshots and controls.
-- **Account devices are named as such.** Adding a camera that is set up as a Reolink account device now says it has to be reset to a local device, instead of showing a login error.
+- **Account devices are named as such.** Adding a camera that is set up as a Reolink account device now says it has to be reset to a local device. A camera whose local login a firmware update locked says to add it again in the Reolink app. Both showed a plain login error before.
+- **Battery PTZ cameras are no longer woken every minute.** The plugin read their saved positions each minute. It now reads them when the camera is awake anyway.
+- **Sleeping cameras react to the first command.** A battery camera, also one behind a Home Hub, turns down the first command while it wakes up, so the siren, spotlight or PTZ did nothing. The plugin now tries again, and a snapshot gets the time the camera needs to wake.
+- **Battery cameras end their motion when they go back to sleep.** Motion could stay on until the next reconnect, and a second press of a battery doorbell could go unreported.
 - **No second full-size stream.** If a camera's sub stream is only a copy of its main stream, it is no longer added as a low-resolution source.
+- **Smaller fixes.** A camera that refuses the continuous siren sounds it twice instead of staying silent, and the log says when camera.ui takes over a battery camera's push address from another app, such as Home Assistant.
 - Bump camera.ui engine and SDK
 
 ## [1.2.26]

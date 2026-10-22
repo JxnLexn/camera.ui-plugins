@@ -14,8 +14,10 @@ import (
 )
 
 const (
-	snapshotTimeout     = 15 * time.Second
-	capabilitiesTimeout = 15 * time.Second
+	snapshotTimeout = 15 * time.Second
+	// a sleeping camera woken over its UID takes about 20 s before it answers
+	sleepingSnapshotTimeout = 40 * time.Second
+	capabilitiesTimeout     = 15 * time.Second
 )
 
 type reolinkCamera struct {
@@ -38,6 +40,7 @@ type reolinkCamera struct {
 	objectSensor  *sdk.ObjectSensor
 	batterySensor *sdk.BatteryInfo
 	spotlight     *reolinkSpotlight
+	ptz           *reolinkPTZ
 
 	doorbellOnce   sync.Once
 	doorbellSensor *sdk.DoorbellTrigger
@@ -279,7 +282,8 @@ func (c *reolinkCamera) setupSensors() error {
 		}
 	}
 	if c.settings.HasPTZ {
-		if err := c.dev.AddSensor(newReolinkPTZ(c)); err != nil {
+		c.ptz = newReolinkPTZ(c)
+		if err := c.dev.AddSensor(c.ptz); err != nil {
 			return err
 		}
 	}
@@ -403,6 +407,9 @@ func (c *reolinkCamera) handleConnection(connected bool) {
 		}
 		// the stored flag can still be the schema default, the camera's own answer wins
 		c.talkOnce.Do(func() { go c.refreshTalk() })
+		if c.ptz != nil && c.sleepsBetweenEvents() {
+			go c.ptz.refreshPresets()
+		}
 		return
 	}
 
@@ -425,6 +432,10 @@ func (c *reolinkCamera) handleConnection(connected bool) {
 			_ = c.dev.Disconnect()
 		}
 	})
+}
+
+func (c *reolinkCamera) sleepsBetweenEvents() bool {
+	return c.settings.BatteryCamera && !c.mainsPowered.Load()
 }
 
 func (c *reolinkCamera) refreshTalk() {
@@ -553,7 +564,11 @@ func (i *cameraImplementation) Snapshot(_ string, _ bool) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), snapshotTimeout)
+	timeout := snapshotTimeout
+	if i.cam.sleepsBetweenEvents() {
+		timeout = sleepingSnapshotTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return cam.Snapshot(ctx)
 }

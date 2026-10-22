@@ -162,16 +162,17 @@ func newReolinkPTZ(cam *reolinkCamera) *reolinkPTZ {
 func (s *reolinkPTZ) OnStart() {
 	s.stop = make(chan struct{})
 	go func() {
-		s.refreshPresets()
-
 		ticker := time.NewTicker(presetRefreshInterval)
 		defer ticker.Stop()
 		for {
+			// a read would wake a sleeping camera, it gets one on each connect instead
+			if !s.cam.sleepsBetweenEvents() {
+				s.refreshPresets()
+			}
 			select {
 			case <-s.stop:
 				return
 			case <-ticker.C:
-				s.refreshPresets()
 			}
 		}
 	}()

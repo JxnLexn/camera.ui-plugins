@@ -773,14 +773,26 @@ func probeCamera(ctx context.Context, device baichuan.DiscoveredDevice, username
 		}
 	}
 
-	if info, err := client.GetDevInfo(ctx); err == nil {
-		result.info = info
+	// msg 80 on an NVR describes the recorder, not the camera on this channel
+	if result.loginInfo.IsNVR() {
+		result.info, _ = client.GetChannelDevInfo(ctx, channel)
+	} else {
+		result.info, _ = client.GetDevInfo(ctx)
 	}
 
-	if support, err := client.GetSupport(ctx); err == nil {
+	support, err := client.GetSupport(ctx)
+	if err != nil && (ctx.Err() != nil || client.Err() != nil) {
+		// adopting without the report would store a battery camera as mains-powered, with no siren or PTZ
+		return probeResult{}, fmt.Errorf("read the camera's capabilities: %w", err)
+	}
+	if err == nil {
 		if caps, ok := support.CapabilitiesFor(channel); ok {
 			result.caps = caps
 		}
+	}
+	if result.info != nil && strings.Contains(strings.ToLower(result.info.Type), "doorbell") {
+		// some doorbell firmwares leave doorbellVersion out of the report
+		result.caps.Doorbell = true
 	}
 
 	if profiles, err := client.StreamProfiles(ctx, channel); err == nil && len(profiles) > 0 {
