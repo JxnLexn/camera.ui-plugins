@@ -1,3 +1,8 @@
+## [1.3.1]
+
+- Update camera.ui SDK
+- Update dependencies
+
 ## [1.3.0]
 
 - **Battery cameras and doorbells are recognized when you add them**, also doorbells on an NVR or Home Hub. camera.ui then sets up a battery camera so it can sleep. Needs camera.ui 2.4.0.
