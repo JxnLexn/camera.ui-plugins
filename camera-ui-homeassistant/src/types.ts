@@ -11,6 +11,7 @@ export interface StorageValues {
   host?: string;
   token?: string;
   includeEntities?: string;
+  doorbellEntities?: string;
   excludeEntities?: string;
 }
 

@@ -18,7 +18,7 @@ bundle
 coverage
 *.local
 test/*
-!test/discovery.test.ts
+!test/*.test.ts
 __pycache__
 .dockerignore
 binary

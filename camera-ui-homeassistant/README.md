@@ -15,3 +15,9 @@ Use **Included Entities** to offer only specific entities, for example `binary_s
 Use **Excluded Entities** to keep specific entities out. Exclusions take priority if an entity appears in both lists. Changes apply on the next discovery; neither list removes or disables already adopted sensors or filters notification targets.
 
 Imported sensors show up in the Sensors view. Assigning one to a camera makes it a detection trigger for that camera, exactly like a native sensor.
+
+## Sound sensors and binary doorbells
+
+Home Assistant `binary_sensor` entities with device class `sound` are offered as audio sensors. For a binary sensor that represents a physical doorbell button (for example one supplied by Tapo Camera Control), add its exact entity ID to **Doorbell Entities** to offer it as a doorbell instead. Inclusion and exclusion filters still apply. This setting only changes the type offered during discovery; remove and re-adopt an already adopted sensor to change its type.
+
+Binary doorbells ring only on a live `off` to `on` transition. Initial state, synchronization, repeated `on` updates, releasing the button, and recovery from an unknown or unavailable state do not ring. Existing `event` doorbells remain supported.

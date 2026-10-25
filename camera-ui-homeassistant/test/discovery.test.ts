@@ -81,3 +81,16 @@ test('updated filters are used on the next discovery', async () => {
   values.includeEntities = '';
   assert.deepEqual(await addresses(plugin), ['binary_sensor.hallway', 'binary_sensor.kitchen']);
 });
+
+test('explicit binary doorbell mapping respects inclusion and exclusion', async () => {
+  const values: StorageValues = { includeEntities: 'binary_sensor.hallway', doorbellEntities: ' binary_sensor.hallway, ' };
+  const plugin = discovery(values);
+  const result = await plugin.onDiscoverSensors();
+  assert.equal(result.length, 1);
+  assert.equal(result[0].type, 'doorbell');
+  values.excludeEntities = 'binary_sensor.hallway';
+  assert.deepEqual(await addresses(plugin), []);
+  values.includeEntities = 'binary_sensor.own';
+  values.doorbellEntities = 'binary_sensor.own';
+  assert.deepEqual(await addresses(plugin), []);
+});
