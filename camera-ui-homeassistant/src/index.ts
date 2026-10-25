@@ -96,6 +96,14 @@ export default class HomeAssistant extends BasePlugin<StorageValues> implements 
       },
       {
         type: 'string',
+        key: 'includeEntities',
+        title: 'Included Entities',
+        description: 'Comma-separated entity ids to offer for adoption. Leave empty to allow all supported entities. Excluded Entities takes priority.',
+        required: false,
+        store: true,
+      },
+      {
+        type: 'string',
         key: 'excludeEntities',
         title: 'Excluded Entities',
         description: 'Comma-separated entity ids that should not be offered for adoption.',
@@ -154,9 +162,12 @@ export default class HomeAssistant extends BasePlugin<StorageValues> implements 
     this.rememberStates(states);
 
     const result: DiscoveredSensor[] = [];
+    const included = entityIds(this.storage.values.includeEntities);
+    const excluded = entityIds(this.storage.values.excludeEntities);
     for (const state of states) {
       const entityId = state.entity_id;
-      if (this.isOwnEntity(registry, entityId) || this.isExcluded(entityId)) continue;
+      if (included.size > 0 && !included.has(entityId)) continue;
+      if (this.isOwnEntity(registry, entityId) || excluded.has(entityId)) continue;
       const type = importableSensorType(state);
       if (!type) continue;
       const entry = registry.byEntityId.get(entityId);
@@ -430,15 +441,15 @@ export default class HomeAssistant extends BasePlugin<StorageValues> implements 
     if (device.manufacturer === OWN_MANUFACTURER) return true;
     return device.identifiers?.some(([domain, id]) => domain === OWN_PLATFORM || (typeof id === 'string' && id.startsWith(OWN_ID_PREFIX))) ?? false;
   }
+}
 
-  private isExcluded(entityId: string): boolean {
-    const raw = this.storage.values.excludeEntities;
-    if (!raw) return false;
-    return raw
+function entityIds(raw: string | undefined): Set<string> {
+  return new Set(
+    (raw ?? '')
       .split(',')
       .map((item) => item.trim())
-      .includes(entityId);
-  }
+      .filter(Boolean),
+  );
 }
 
 function areaName(registry: Registry, entry: HaRegistryEntry | undefined): string | undefined {

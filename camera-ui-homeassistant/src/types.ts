@@ -10,6 +10,7 @@ export interface StorageValues {
   notifyServiceNames?: Record<string, string>;
   host?: string;
   token?: string;
+  includeEntities?: string;
   excludeEntities?: string;
 }
 
