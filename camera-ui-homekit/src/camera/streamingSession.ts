@@ -17,18 +17,31 @@ import { AudioStreamingCodecType, SRTPCryptoSuites } from '../hap.js';
 
 import { placeholderImageFor } from '../utils/placeholder.js';
 import { RtpSplitter } from '../utils/rtp-splitter.js';
-import { createReceiverStats, cumulativePacketsLost, ntpTimestamp, recordReceiverReport, recordRtpPacket, summarizeReceiverStats } from '../utils/rtp-stats.js';
+import {
+  createReceiverStats,
+  cumulativePacketsLost,
+  ntpTimestamp,
+  recordReceiverReport,
+  recordRtcpPackets,
+  recordRtpPacket,
+  summarizeReceiverStats,
+} from '../utils/rtp-stats.js';
 import { generateSrtpOptions, generateSsrc, getSessionConfig } from '../utils/srtp.js';
-import { getDurationSeconds } from '../utils/utils.js';
+import { forcesTranscode, getDurationSeconds, heightForAspectRatio } from '../utils/utils.js';
+import { VideoSourceSwitch } from './videoSourceSwitch.js';
 
-import type { CameraDevice, LoggerService, RtpSession } from '@camera.ui/sdk';
+import type { CameraDevice, CameraDeviceSource, LoggerService, RtpSession, RtpSessionOptions } from '@camera.ui/sdk';
 import type { ChildProcess } from 'node:child_process';
 import type { RtpPacket } from 'werift';
-import type { PrepareStreamRequest, StartStreamRequest } from '../hap.js';
+import type { PrepareStreamRequest, ReconfiguredVideoInfo, StartStreamRequest } from '../hap.js';
 import type { RtpSenderState } from '../utils/rtp-stats.js';
 import type { CameraAccessory } from './accessory.js';
 
 const SRTP_AUTH_TAG_LENGTH = 10;
+// HomeKit starts remote view at 640x360 and asks for 1280x720 once the connection holds
+const SMALL_PICTURE_MAX_WIDTH = 640;
+// HomeKit repeats a PLI for every lost frame until the keyframe arrives
+const KEYFRAME_REQUEST_INTERVAL = 1000;
 
 export class StreamingSession {
   public start: number;
@@ -43,6 +56,7 @@ export class StreamingSession {
 
   public sourceAddress?: string;
 
+  private videoSrtpSession: SrtpSession;
   private videoSrtcpSession: SrtcpSession;
   private audioSrtcpSession: SrtcpSession;
   private homekitSrtcpSession: SrtcpSession;
@@ -50,9 +64,16 @@ export class StreamingSession {
 
   private cameraAccessory: CameraAccessory;
   private cameraDevice: CameraDevice;
-  private streamingSession?: RtpSession;
+  private audioSession?: RtpSession;
+  private startStreamRequest?: StartStreamRequest;
+  private videoSwitch?: VideoSourceSwitch;
+  private videoSessions = new Map<RtpSession, CameraDeviceSource>();
+  private videoChange = Promise.resolve();
+  private requestedVideo?: ReconfiguredVideoInfo;
+  private keyframeRequestedAt = 0;
+  private requestedBitrateSample?: { at: number; octets: number };
   private placeholderProcess?: ChildProcess;
-  private placeholderDisposables: Disposable[] = [];
+  private disposables: Disposable[] = [];
   private prepareStreamRequest: PrepareStreamRequest;
   private cameraLogger: LoggerService;
   private stopPromise?: Promise<void>;
@@ -82,6 +103,7 @@ export class StreamingSession {
     this.start = start;
     this.cameraLogger = cameraDevice.logger;
 
+    this.videoSrtpSession = new SrtpSession(getSessionConfig(this.videoSrtp));
     this.videoSrtcpSession = new SrtcpSession(getSessionConfig(this.videoSrtp));
     this.audioSrtcpSession = new SrtcpSession(getSessionConfig(this.audioSrtp));
     this.homekitSrtcpSession = new SrtcpSession(getSessionConfig(prepareStreamRequest.video));
@@ -135,18 +157,18 @@ export class StreamingSession {
     });
   }
 
-  private setupInactivityDetection(session: RtpSession): void {
+  private setupInactivityDetection(): void {
     let debounceTimer: NodeJS.Timeout | undefined;
     const resetDebounce = () => {
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
+      debounceTimer = setTimeout(() => {
         this.cameraLogger.log(`Live stream appears to be inactive. (${getDurationSeconds(this.start)}s)`);
-        await session.stop();
+        this.stop();
       }, 5000);
     };
     const initialTimer = setTimeout(resetDebounce, 15000);
     const packetSub = this.packetReceivedSubject.subscribe(resetDebounce);
-    session.addSubscriptions(
+    this.disposables.push(
       new Disposable(() => {
         clearTimeout(initialTimer);
         clearTimeout(debounceTimer);
@@ -155,7 +177,7 @@ export class StreamingSession {
     );
   }
 
-  private setupRtcpSenderReports(session: RtpSession, startStreamRequest: StartStreamRequest): void {
+  private setupRtcpSenderReports(startStreamRequest: StartStreamRequest): void {
     const sendSenderReport = async (state: RtpSenderState | undefined, ssrc: number, srtcp: SrtcpSession, splitter: RtpSplitter, port: number): Promise<void> => {
       if (!state) return;
 
@@ -187,7 +209,7 @@ export class StreamingSession {
       () => sendSenderReport(this.audioSenderState, this.audioSsrc, this.audioSrtcpSession, this.audioSplitter, this.prepareStreamRequest.audio.port),
       Math.max(500, (startStreamRequest.audio.rtcp_interval || 5) * 1000),
     );
-    session.addSubscriptions(
+    this.disposables.push(
       new Disposable(() => {
         clearInterval(videoInterval);
         clearInterval(audioInterval);
@@ -195,8 +217,9 @@ export class StreamingSession {
     );
   }
 
-  public async activate(startStreamRequest: StartStreamRequest): Promise<void> {
+  public async activate(startStreamRequest: StartStreamRequest, matchRequestedWidth = false): Promise<void> {
     this.cameraLogger.debug('Starting stream:', startStreamRequest);
+    this.setupInactivityDetection();
 
     const placeholder = placeholderImageFor(this.cameraDevice);
     if (placeholder) {
@@ -205,21 +228,30 @@ export class StreamingSession {
       return;
     }
 
-    const session = this.cameraDevice.streamSource.createRtpSession({
-      audio: true,
-      video: true,
-      backchannel: true,
+    this.startStreamRequest = startStreamRequest;
+    this.requestedVideo = startStreamRequest.video;
+    const main = this.cameraDevice.streamSource;
+    const source = matchRequestedWidth ? this.videoSourceFor(startStreamRequest.video.width) : main;
+    if (source._id !== main._id) {
+      this.cameraLogger.log(`[RTP] HomeKit asks for a small picture, video starts on ${source.name}`);
+    }
+
+    const video = this.createVideoSession(source);
+    this.videoSwitch = new VideoSourceSwitch(video, (session, previous, waitedMs) => {
+      this.cameraLogger.log(`[RTP] Switched video to ${this.videoSessions.get(session)?.name} at its keyframe after ${waitedMs}ms`);
+      this.stopVideoSession(previous);
     });
-    this.streamingSession = session;
+    this.setupRtcpSenderReports(startStreamRequest);
 
-    session.onError.subscribe((error) => {
-      this.cameraLogger.warn(`Live stream source error: ${error.message}`);
-    });
+    const width = matchRequestedWidth ? startStreamRequest.video.width : undefined;
+    const videoOptions = this.videoStreamOptions(startStreamRequest, source, startStreamRequest.video, width);
+    await Promise.all([video.startStream(videoOptions), this.startAudio(startStreamRequest)]);
+  }
 
-    this.setupInactivityDetection(session);
-    this.setupRtcpSenderReports(session, startStreamRequest);
-
-    await this.run(session, startStreamRequest);
+  public followRequestedVideo(video: ReconfiguredVideoInfo): Promise<void> {
+    this.requestedVideo = video;
+    this.videoChange = this.videoChange.then(() => this.followRequestedSource());
+    return this.videoChange;
   }
 
   public stop(): Promise<void> {
@@ -229,18 +261,24 @@ export class StreamingSession {
 
   private async shutdown(): Promise<void> {
     this.cameraLogger.debug('Stopping stream');
-    const streamingSession = this.streamingSession;
-    this.streamingSession = undefined;
-
-    try {
-      await streamingSession?.stop();
-    } finally {
-      this.stopPlaceholderProcess();
-      this.audioSplitter.close();
-      this.videoSplitter.close();
-      this.logStreamSummary();
-      this.cameraLogger.debug('Stream stopped');
+    for (const disposable of this.disposables) {
+      disposable.dispose();
     }
+    this.disposables = [];
+
+    const sessions = [...this.videoSessions.keys()];
+    if (this.audioSession) {
+      sessions.push(this.audioSession);
+    }
+    this.audioSession = undefined;
+    this.videoSessions.clear();
+
+    await Promise.all(sessions.map((session) => session.stop().catch(() => undefined)));
+    this.stopPlaceholderProcess();
+    this.audioSplitter.close();
+    this.videoSplitter.close();
+    this.logStreamSummary();
+    this.cameraLogger.debug('Stream stopped');
   }
 
   private async runPlaceholder(imagePath: string, startStreamRequest: StartStreamRequest): Promise<void> {
@@ -304,36 +342,9 @@ export class StreamingSession {
         this.cameraLogger.warn(`Placeholder stream exited with code ${code}`);
       }
     });
-
-    this.setupPlaceholderInactivityDetection();
-  }
-
-  private setupPlaceholderInactivityDetection(): void {
-    let debounceTimer: NodeJS.Timeout | undefined;
-    const resetDebounce = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        this.cameraLogger.log(`Live stream appears to be inactive. (${getDurationSeconds(this.start)}s)`);
-        this.stopPlaceholderProcess();
-      }, 5000);
-    };
-    const initialTimer = setTimeout(resetDebounce, 15000);
-    const packetSub = this.packetReceivedSubject.subscribe(resetDebounce);
-    this.placeholderDisposables.push(
-      new Disposable(() => {
-        clearTimeout(initialTimer);
-        clearTimeout(debounceTimer);
-        packetSub.dispose();
-      }),
-    );
   }
 
   private stopPlaceholderProcess(): void {
-    for (const disposable of this.placeholderDisposables) {
-      disposable.dispose();
-    }
-    this.placeholderDisposables = [];
-
     const process = this.placeholderProcess;
     this.placeholderProcess = undefined;
     if (process && !process.killed) {
@@ -341,57 +352,170 @@ export class StreamingSession {
     }
   }
 
-  private async run(session: RtpSession, startStreamRequest: StartStreamRequest): Promise<void> {
+  private async startAudio(startStreamRequest: StartStreamRequest): Promise<void> {
     const fixedOpusClock = this.opusClock === 'fixed' && startStreamRequest.audio.codec === AudioStreamingCodecType.OPUS;
     this.audioClockRate = fixedOpusClock ? 48000 : startStreamRequest.audio.sample_rate * 1000;
     this.audioNegotiated = `${startStreamRequest.audio.codec.toLowerCase()} ${startStreamRequest.audio.sample_rate}k/${startStreamRequest.audio.packet_time}ms`;
     this.audioPacketsPerSecond = Math.round(1000 / startStreamRequest.audio.packet_time);
 
+    const source = this.cameraDevice.streamSource;
+    // probed and neither audio nor talkback, go2rtc would refuse the session
+    if (source.videoCodec && !source.audioCodecs?.length && !source.backchannelAudioCodec) {
+      return;
+    }
+
+    const session = source.createRtpSession({ audio: true, video: false, backchannel: true });
+    this.audioSession = session;
+    session.onError.subscribe((error) => this.cameraLogger.warn(`Live stream source error: ${error.message}`));
     this.listenForAudioPackets(session, startStreamRequest);
-    this.listenForVideoPackets(session);
 
-    await session.startStream({
-      hardware: this.cameraAccessory.cameraStorage.values.useHardwareAcceleration ? 'auto' : undefined,
-      video: {
-        codec: this.videoCodec,
-        // the muxer sizes clear RTP, SRTP appends its tag afterwards
-        mtu: startStreamRequest.video.mtu - SRTP_AUTH_TAG_LENGTH,
-        ssrc: this.videoSsrc,
-        payloadType: startStreamRequest.video.pt,
-        fps: startStreamRequest.video.fps,
-        width: startStreamRequest.video.width,
-        bitrate: startStreamRequest.video.max_bit_rate * 1000,
-      },
-      audio: {
-        codec: startStreamRequest.audio.codec === AudioStreamingCodecType.OPUS ? 'opus' : 'aac',
-        mtu: 1200,
-        sampleRate: startStreamRequest.audio.sample_rate * 1000,
-        channels: startStreamRequest.audio.channel,
-        ssrc: this.audioSsrc,
+    try {
+      await session.startStream({
+        audio: {
+          codec: startStreamRequest.audio.codec === AudioStreamingCodecType.OPUS ? 'opus' : 'aac',
+          mtu: 1200,
+          sampleRate: startStreamRequest.audio.sample_rate * 1000,
+          channels: startStreamRequest.audio.channel,
+          ssrc: this.audioSsrc,
+          payloadType: startStreamRequest.audio.pt,
+          frameDuration: startStreamRequest.audio.packet_time,
+        },
+      });
+
+      await session.startBackchannel({
+        decoderCodec: startStreamRequest.audio.codec === AudioStreamingCodecType.OPUS ? 'libopus' : 'libfdk_aac',
         payloadType: startStreamRequest.audio.pt,
-        frameDuration: startStreamRequest.audio.packet_time,
-      },
-    });
-
-    await session.startBackchannel({
-      decoderCodec: startStreamRequest.audio.codec === AudioStreamingCodecType.OPUS ? 'libopus' : 'libfdk_aac',
-      payloadType: startStreamRequest.audio.pt,
-      clockRate: this.audioClockRate,
-      channels: startStreamRequest.audio.channel,
-      fmtp:
-        startStreamRequest.audio.codec === AudioStreamingCodecType.OPUS
-          ? 'minptime=10;useinbandfec=1'
-          : 'profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=F8F0212C00BC00',
-      srtp: {
-        key: this.prepareStreamRequest.audio.srtp_key,
-        salt: this.prepareStreamRequest.audio.srtp_salt,
-        suite: this.prepareStreamRequest.audio.srtpCryptoSuite === SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80 ? 'AES_CM_128_HMAC_SHA1_80' : 'AES_CM_256_HMAC_SHA1_80',
-      },
-    });
+        clockRate: this.audioClockRate,
+        channels: startStreamRequest.audio.channel,
+        fmtp:
+          startStreamRequest.audio.codec === AudioStreamingCodecType.OPUS
+            ? 'minptime=10;useinbandfec=1'
+            : 'profile-level-id=1;mode=AAC-hbr;sizelength=13;indexlength=3;indexdeltalength=3; config=F8F0212C00BC00',
+        srtp: {
+          key: this.prepareStreamRequest.audio.srtp_key,
+          salt: this.prepareStreamRequest.audio.srtp_salt,
+          suite: this.prepareStreamRequest.audio.srtpCryptoSuite === SRTPCryptoSuites.AES_CM_128_HMAC_SHA1_80 ? 'AES_CM_128_HMAC_SHA1_80' : 'AES_CM_256_HMAC_SHA1_80',
+        },
+      });
+    } catch (error) {
+      if (!this.stopPromise) {
+        this.cameraLogger.warn('[RTP] Failed to start audio, the live stream continues without it', error);
+      }
+      return;
+    }
 
     if (session.hasBackchannel) {
       this.listenForReturnAudioPackets(session);
     }
+  }
+
+  private async followRequestedSource(): Promise<void> {
+    const { startStreamRequest, requestedVideo } = this;
+    if (!startStreamRequest || !requestedVideo || this.stopPromise) {
+      return;
+    }
+
+    const source = this.videoSourceFor(requestedVideo.width);
+    const running = [...this.videoSessions].find(([, input]) => input._id === source._id)?.[0];
+    // a stream sent as requested starts again with the new size, frame rate and bitrate
+    if (running && !this.cameraAccessory.cameraStorage.values.streamAsRequested) {
+      this.switchVideo(running);
+      return;
+    }
+
+    // the current stream plays on until this one reaches a live keyframe, a replayed GOP would show as fast-forward
+    const session = this.createVideoSession(source, false);
+    try {
+      await session.startStream(this.videoStreamOptions(startStreamRequest, source, requestedVideo, requestedVideo.width));
+    } catch (error) {
+      if (!this.stopPromise) {
+        this.cameraLogger.warn(`[RTP] Failed to start ${source.name}, video stays on the current stream`, error);
+      }
+      this.stopVideoSession(session);
+      return;
+    }
+    if (!this.stopPromise) {
+      this.switchVideo(session);
+    }
+  }
+
+  private videoSourceFor(width: number): CameraDeviceSource {
+    const main = this.cameraDevice.streamSource;
+    if (width > SMALL_PICTURE_MAX_WIDTH) {
+      return main;
+    }
+    const small = this.cameraDevice.lowResolutionSource ?? this.cameraDevice.midResolutionSource;
+    if (!small || small._id === main._id) {
+      this.cameraLogger.log('[RTP] HomeKit asks for a small picture, the camera has no low or mid resolution source');
+      return main;
+    }
+    return small;
+  }
+
+  private createVideoSession(source: CameraDeviceSource, gop = true): RtpSession {
+    const session = source.createRtpSession({ audio: false, video: true, backchannel: false, gop });
+    this.videoSessions.set(session, source);
+    session.onError.subscribe((error) => this.cameraLogger.warn(`Live stream source error: ${error.message}`));
+    this.listenForVideoPackets(session);
+    return session;
+  }
+
+  private switchVideo(session: RtpSession): void {
+    const dropped = this.videoSwitch?.switchTo(session);
+    if (dropped) {
+      this.stopVideoSession(dropped);
+    }
+  }
+
+  private stopVideoSession(session: RtpSession): void {
+    this.videoSessions.delete(session);
+    session.stop().catch(() => undefined);
+  }
+
+  private requestKeyframe(): void {
+    const now = performance.now();
+    if (now - this.keyframeRequestedAt < KEYFRAME_REQUEST_INTERVAL) {
+      return;
+    }
+    this.keyframeRequestedAt = now;
+    this.videoSwitch?.current.requestKeyframe();
+  }
+
+  private videoStreamOptions(startStreamRequest: StartStreamRequest, source: CameraDeviceSource, requested: ReconfiguredVideoInfo, width?: number): RtpSessionOptions {
+    const storage = this.cameraAccessory.cameraStorage.values;
+    const hardware = storage.useHardwareAcceleration ? 'auto' : undefined;
+    const video = {
+      codec: this.videoCodec,
+      // the muxer sizes clear RTP, SRTP appends its tag afterwards
+      mtu: startStreamRequest.video.mtu - SRTP_AUTH_TAG_LENGTH,
+      ssrc: this.videoSsrc,
+      payloadType: startStreamRequest.video.pt,
+      transcode: forcesTranscode(storage),
+    };
+
+    if (storage.streamAsRequested) {
+      return {
+        hardware,
+        video: { ...video, width: requested.width, height: requested.height, fps: requested.fps, bitrate: requested.max_bit_rate * 1000 },
+      };
+    }
+
+    // only a transcode scales, the small picture takes the camera's aspect ratio to match the main stream after the switch
+    const small = width && source._id !== this.cameraDevice.streamSource._id;
+    const height = small ? heightForAspectRatio(width, this.cameraDevice.interfaceSettings.aspectRatio) : undefined;
+    return { hardware, video: { ...video, width, height } };
+  }
+
+  private logRequestedBitrate(bitrate: number): void {
+    const sender = this.videoSenderState;
+    const previous = this.requestedBitrateSample;
+    this.requestedBitrateSample = sender && { at: sender.wallclock, octets: sender.octets };
+
+    let sent = '';
+    if (sender && previous && sender.wallclock > previous.at) {
+      sent = `, video ran at ${Math.round(((sender.octets - previous.octets) * 8) / (sender.wallclock - previous.at))} kbit/s since the last request`;
+    }
+    this.cameraLogger.debug(`[RTP] HomeKit asks for at most ${Math.round(bitrate / 1000)} kbit/s${sent}`);
   }
 
   private listenForVideoPackets(session: RtpSession): void {
@@ -402,17 +526,18 @@ export class StreamingSession {
       video: { port },
     } = this.prepareStreamRequest;
 
-    const videoSrtpSession = new SrtpSession(getSessionConfig(this.videoSrtp));
-
     session.addSubscriptions(
       session.onVideoRtp.subscribe(async (rtp: RtpPacket) => {
         if (!sentVideo) {
           sentVideo = true;
           this.cameraLogger.debug(`Received video data (${getDurationSeconds(this.start)}s)`);
         }
+        if (!this.videoSwitch?.rewrite(session, rtp)) {
+          return;
+        }
 
         try {
-          const encryptedPacket = videoSrtpSession.encrypt(rtp.payload, rtp.header);
+          const encryptedPacket = this.videoSrtpSession.encrypt(rtp.payload, rtp.header);
           this.videoSenderState = recordRtpPacket(this.videoSenderState, rtp, 90000);
           this.videoSplitter.send(encryptedPacket, { port, address }).catch(() => {});
         } catch {
@@ -552,11 +677,21 @@ export class StreamingSession {
 
     try {
       const srtcp = kind === 'video' ? this.homekitSrtcpSession : this.homekitAudioSrtcpSession;
-      const packets = RtcpPacketConverter.deSerialize(srtcp.decrypt(message));
+      const rtcp = srtcp.decrypt(message);
+      const requestedBitrate = stats.requestedBitrate;
+      recordRtcpPackets(stats, rtcp);
+      if (kind === 'video' && stats.requestedBitrate !== requestedBitrate) {
+        this.logRequestedBitrate(stats.requestedBitrate);
+      }
+      const packets = RtcpPacketConverter.deSerialize(rtcp);
 
       for (const packet of packets) {
         if (packet instanceof RtcpRrPacket) {
           for (const report of packet.reports) {
+            // HomeKit reports one lost packet before the first one arrives
+            if (report.highestSequence === 0) {
+              continue;
+            }
             recordReceiverReport(stats, report);
 
             const packetsLost = cumulativePacketsLost(report);
@@ -567,8 +702,11 @@ export class StreamingSession {
             }
           }
         } else if (packet instanceof RtcpPayloadSpecificFeedback) {
-          if (packet.feedback instanceof PictureLossIndication) {
+          if (packet.feedback instanceof PictureLossIndication || 'fir' in packet.feedback) {
             stats.pliCount++;
+            if (kind === 'video') {
+              this.requestKeyframe();
+            }
           }
         }
       }

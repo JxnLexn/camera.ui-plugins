@@ -50,10 +50,62 @@ export interface RtcpReceiverStats {
   rttMaxMs: number;
   rttCount: number;
   pliCount: number;
+  rtcpTypes: Record<string, number>;
+  requestedBitrate: number;
+  requestedBitrateMax: number;
 }
 
+const RTCP_TYPE_NAMES: Record<string, string> = {
+  200: 'sr',
+  201: 'rr',
+  202: 'sdes',
+  203: 'bye',
+  204: 'app',
+  '205/1': 'nack',
+  '205/3': 'tmmbr',
+  '205/4': 'tmmbn',
+  '205/15': 'twcc',
+  '206/1': 'pli',
+  '206/4': 'fir',
+  '206/15': 'remb',
+  207: 'xr',
+};
+
 export function createReceiverStats(): RtcpReceiverStats {
-  return { rrCount: 0, packetsLost: 0, fractionLostMax: 0, jitterSum: 0, jitterMax: 0, jitterCount: 0, rttSumMs: 0, rttMaxMs: 0, rttCount: 0, pliCount: 0 };
+  return {
+    rrCount: 0,
+    packetsLost: 0,
+    fractionLostMax: 0,
+    jitterSum: 0,
+    jitterMax: 0,
+    jitterCount: 0,
+    rttSumMs: 0,
+    rttMaxMs: 0,
+    rttCount: 0,
+    pliCount: 0,
+    rtcpTypes: {},
+    requestedBitrate: 0,
+    requestedBitrateMax: 0,
+  };
+}
+
+export function recordRtcpPackets(stats: RtcpReceiverStats, rtcp: Buffer): void {
+  for (let offset = 0; offset + 4 <= rtcp.length; offset += (rtcp.readUInt16BE(offset + 2) + 1) * 4) {
+    const type = rtcp[offset + 1];
+    const key = type === 205 || type === 206 ? `${type}/${rtcp[offset] & 0x1f}` : `${type}`;
+    const name = RTCP_TYPE_NAMES[key] ?? key;
+    stats.rtcpTypes[name] = (stats.rtcpTypes[name] ?? 0) + 1;
+    if (name === 'tmmbr' && offset + 20 <= rtcp.length) {
+      recordRequestedBitrate(stats, rtcp.readUInt32BE(offset + 16));
+    }
+  }
+}
+
+function recordRequestedBitrate(stats: RtcpReceiverStats, entry: number): void {
+  // RFC 5104: 6 bit exponent, 17 bit mantissa, 9 bit packet overhead
+  const bitrate = ((entry >>> 9) & 0x1ffff) * 2 ** (entry >>> 26);
+  stats.requestedBitrate = bitrate;
+  stats.requestedBitrateMax = Math.max(stats.requestedBitrateMax, bitrate);
 }
 
 export function cumulativePacketsLost(report: RtcpReceiverInfo): number {
@@ -122,6 +174,9 @@ export function summarizeReceiverStats(
     if (stats.rttCount > 0) parts.push(`rtt avg ${Math.round(stats.rttSumMs / stats.rttCount)}ms max ${Math.round(stats.rttMaxMs)}ms`);
     if (stats.pliCount > 0) parts.push(`${stats.pliCount} keyframe requests`);
   }
+  const rtcpTypes = Object.entries(stats.rtcpTypes).map(([name, count]) => `${name} ${count}`);
+  if (rtcpTypes.length > 0) parts.push(`rtcp ${rtcpTypes.join(' ')}`);
+  if (stats.requestedBitrateMax > 0) parts.push(`requested up to ${Math.round(stats.requestedBitrateMax / 1000)} kbit/s`);
   parts.push(`pacing avg ${Math.round(sender.pacingJitterMs)}ms max ${Math.round(sender.pacingJitterMaxMs)}ms`);
   return parts.join(', ');
 }

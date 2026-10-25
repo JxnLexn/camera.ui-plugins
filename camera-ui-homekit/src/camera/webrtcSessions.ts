@@ -15,7 +15,7 @@ import {
 
 import { audioPayloadType as AUDIO_PAYLOAD_TYPE, secureVideoMaxRemoteSessions, videoPayloadType as VIDEO_PAYLOAD_TYPE } from '../constants.js';
 import { createReceiverStats, recordReceiverReport, recordRtpPacket, summarizeReceiverStats } from '../utils/rtp-stats.js';
-import { filterBindAddresses, getDurationSeconds } from '../utils/utils.js';
+import { filterBindAddresses, forcesTranscode, getDurationSeconds, heightForAspectRatio } from '../utils/utils.js';
 import { SecureVideoSFrame } from './sframe.js';
 import { HevcAccessUnitAssembler, isHevcKeyframe, SFrameRtpPacketizer } from './sframeRtp.js';
 import { Talkback } from './talkback.js';
@@ -284,9 +284,10 @@ export class WebRtcSessions implements WebRTCStreamingDelegate {
       return layers;
     }
     const codec = lowSource.videoCodec ?? 'an unknown codec';
-    if (lowSource.videoCodec === 'H265') {
+    const storage = this.cameraAccessory.cameraStorage.values;
+    if (lowSource.videoCodec === 'H265' && !forcesTranscode(storage)) {
       this.cameraLogger.log(`[WebRTC] Sending ${lowSource.name} as it is (HEVC) for remote view on slow connections such as LTE`);
-    } else if (this.cameraAccessory.cameraStorage.values.allowTranscodingForMobileData) {
+    } else if (lowSource.videoCodec === 'H265' || storage.allowTranscodingForMobileData) {
       this.cameraLogger.log(`[WebRTC] Transcoding ${lowSource.name} from ${codec} to HEVC, remote view on slow connections such as LTE needs a small HEVC stream`);
     } else {
       this.cameraLogger.log(`[WebRTC] No small stream for slow connections, ${lowSource.name} sends ${codec} and Allow transcoding for mobile data is off`);
@@ -314,7 +315,9 @@ export class WebRtcSessions implements WebRTCStreamingDelegate {
     this.cameraLogger.debug(`[WebRTC] Activating stream (${getDurationSeconds(session.startedAt)}s)`);
 
     const [mainLayer, ...lowLayers] = session.layers;
-    const hardware = this.cameraAccessory.cameraStorage.values.useHardwareAcceleration ? 'auto' : undefined;
+    const storage = this.cameraAccessory.cameraStorage.values;
+    const hardware = storage.useHardwareAcceleration ? 'auto' : undefined;
+    const transcode = forcesTranscode(storage);
     const audioPayloadType = session.audioTransceiver.sender.codec?.payloadType ?? AUDIO_PAYLOAD_TYPE;
 
     const stream = mainLayer.source.createRtpSession({ audio: true, video: true, backchannel: true });
@@ -345,7 +348,7 @@ export class WebRtcSessions implements WebRTCStreamingDelegate {
       const lowStream = layer.source.createRtpSession({ audio: false, video: true, backchannel: false });
       layer.stream = lowStream;
       this.forwardVideo(session, layer, lowStream);
-      const { width, frameRate, peakBitrate } = layer.tier;
+      const { width, height, frameRate, peakBitrate } = layer.tier;
       return lowStream
         .startStream({
           hardware,
@@ -355,17 +358,22 @@ export class WebRtcSessions implements WebRTCStreamingDelegate {
             payloadType: videoPayloadType(layer),
             fps: frameRate,
             width,
+            // the viewer keeps the aspect ratio of the first layer it shows, also after switching to the main layer
+            height: storage.streamAsRequested ? height : heightForAspectRatio(width, this.cameraDevice.interfaceSettings.aspectRatio),
             bitrate: peakBitrate * 1000,
+            transcode,
             encoderOptions: { g: frameRate },
           },
         })
         .catch((error) => this.cameraLogger.warn(`[WebRTC] Failed to start layer ${layer.rid} from ${layer.source.name}`, error));
     });
 
+    const mainTier = mainLayer.tier;
+    const requestedSize = storage.streamAsRequested ? { width: mainTier.width, height: mainTier.height, fps: mainTier.frameRate } : {};
     await Promise.all([
       stream.startStream({
         hardware,
-        video: { codec: 'hevc', mtu: 1200, payloadType: videoPayloadType(mainLayer), fps: mainLayer.tier.frameRate, bitrate: mainLayer.tier.peakBitrate * 1000 },
+        video: { codec: 'hevc', mtu: 1200, payloadType: videoPayloadType(mainLayer), bitrate: mainTier.peakBitrate * 1000, transcode, ...requestedSize },
         audio: { codec: 'opus', mtu: 1200, payloadType: audioPayloadType, sampleRate: 48000, channels: 1, frameDuration: 20 },
       }),
       ...lowStarts,

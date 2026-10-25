@@ -6,6 +6,8 @@ const HEVC_NAL_AP = 48;
 const HEVC_NAL_FU = 49;
 const HEVC_NAL_IRAP_FIRST = 16;
 const HEVC_NAL_IRAP_LAST = 23;
+const H264_NAL_IDR = 5;
+const H264_NAL_SPS = 7;
 const H264_NAL_STAP_A = 24;
 const H264_NAL_FU_A = 28;
 
@@ -32,6 +34,22 @@ export function isHevcKeyframe(accessUnit: Buffer): boolean {
     offset += 4 + accessUnit.readUInt32BE(offset);
   }
   return false;
+}
+
+export function startsH264Keyframe(payload: Buffer): boolean {
+  const type = payload[0] & 0x1f;
+  if (type === H264_NAL_STAP_A) {
+    for (let offset = 1; offset + 3 <= payload.length; offset += 2 + payload.readUInt16BE(offset)) {
+      if (isH264KeyNal(payload[offset + 2] & 0x1f)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if (type === H264_NAL_FU_A) {
+    return payload.length > 1 && (payload[1] & 0x80) !== 0 && isH264KeyNal(payload[1] & 0x1f);
+  }
+  return isH264KeyNal(type);
 }
 
 export function createAccessUnitAssembler(codec: SecureVideoCodec): AccessUnitAssembler {
@@ -189,4 +207,8 @@ export class SFrameRtpDepacketizer {
     this.chunks = [];
     return ciphertext;
   }
+}
+
+function isH264KeyNal(type: number): boolean {
+  return type === H264_NAL_IDR || type === H264_NAL_SPS;
 }

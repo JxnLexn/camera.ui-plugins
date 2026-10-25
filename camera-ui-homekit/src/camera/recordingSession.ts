@@ -369,6 +369,7 @@ export class RecordingSession extends EventEmitter {
         height: this.configuration?.videoCodec.resolution[1],
         fps: this.configuration?.videoCodec.resolution[2],
         bitrate: this.configuration?.videoCodec.parameters.bitRate ? this.configuration.videoCodec.parameters.bitRate * 1000 : undefined,
+        transcode: this.cameraAccessory.cameraStorage.values.alwaysTranscodeForRecording,
       },
       audio: this.options.audio.bitrate ? { encoderOptions: { b: this.options.audio.bitrate } } : undefined,
     });

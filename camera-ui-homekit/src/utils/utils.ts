@@ -6,6 +6,7 @@ import { HDSProtocolSpecificErrorReason } from '../hap.js';
 import type {
   AudioStreamInfo,
   BatteryInfoLike,
+  CameraAspectRatio,
   DeviceStorage,
   Disposable,
   DoorbellTriggerLike,
@@ -16,6 +17,7 @@ import type {
   VideoStreamInfo,
 } from '@camera.ui/sdk';
 import type { H264Level, H264Profile } from '../hap.js';
+import type { CameraStorageValues } from '../types.js';
 
 export interface RecordingRequest {
   audio: {
@@ -93,6 +95,10 @@ export async function followInstance(storage: DeviceStorage<{ seenInstanceId?: s
   await storage.setInternalValue('seenInstanceId', instanceId);
 }
 
+export function forcesTranscode({ alwaysTranscode, streamAsRequested }: CameraStorageValues): boolean {
+  return alwaysTranscode || streamAsRequested;
+}
+
 export function generateValidAccessoryName(input = ''): string {
   const trimSpecialChars = (str: string): string => {
     return str.replace(/^[^a-zA-Z]+|[^a-zA-Z0-9]+$/g, '');
@@ -146,6 +152,11 @@ export function getHdsReason(reason?: HDSProtocolSpecificErrorReason): string {
     default:
       return 'Unknown';
   }
+}
+
+export function heightForAspectRatio(width: number, aspectRatio: CameraAspectRatio): number {
+  const [w, h] = aspectRatio.split(':').map(Number);
+  return Math.round((width * h) / w / 2) * 2;
 }
 
 export function isBatteryInfo(obj: any): obj is BatteryInfoLike {

@@ -98,7 +98,7 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       this.cameraLogger.debug(`[RTP] Activating stream (${getDurationSeconds(session.start)}s)`);
 
       session
-        .activate(request)
+        .activate(request, true)
         .then(async () => {
           if (this.disposed || this.sessions[sessionID] !== session) {
             await session.stop();
@@ -106,7 +106,8 @@ export class StreamingDelegate implements CameraStreamingDelegate {
             return;
           }
 
-          this.cameraLogger.log(`[RTP] Streaming activated (${getDurationSeconds(session.start)}s)`);
+          const { width, height, fps, max_bit_rate } = request.video;
+          this.cameraLogger.log(`[RTP] Streaming activated (${getDurationSeconds(session.start)}s), HomeKit asks for ${width}x${height}@${fps}, ${max_bit_rate} kbit/s`);
           callback();
         })
         .catch(async (error: any) => {
@@ -122,7 +123,10 @@ export class StreamingDelegate implements CameraStreamingDelegate {
       delete this.sessions[sessionID];
       session.stop().then(() => callback(), callback);
     } else {
+      const { width, height, fps, max_bit_rate } = request.video;
+      this.cameraLogger.log(`[RTP] HomeKit asks for ${width}x${height}@${fps}, ${max_bit_rate} kbit/s (${getDurationSeconds(session.start)}s)`);
       callback();
+      session.followRequestedVideo(request.video).catch((error) => this.cameraLogger.warn('[RTP] Failed to follow the requested size', error));
     }
   }
 

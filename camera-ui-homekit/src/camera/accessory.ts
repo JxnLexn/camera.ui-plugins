@@ -488,6 +488,44 @@ export class CameraAccessory extends Subscribed {
       },
       {
         type: 'boolean',
+        key: 'alwaysTranscode',
+        title: 'Always transcode',
+        description: 'Transcode live view even when HomeKit could play the camera stream as it is. Puts extra load on the server.',
+        group: 'Advanced',
+        defaultValue: false,
+        store: true,
+        onSet: async (state: boolean) => {
+          this.cameraLogger.log('Always transcode:', state);
+        },
+      },
+      {
+        type: 'boolean',
+        key: 'alwaysTranscodeForRecording',
+        title: 'Always transcode for HKSV',
+        description:
+          'Transcode recordings to H.264 in the size, frame rate and bitrate HomeKit asks for, even when it could take the stream as is. Puts extra load on the server.',
+        group: 'Advanced',
+        defaultValue: false,
+        store: true,
+        onSet: async (state: boolean) => {
+          this.cameraLogger.log('Always transcode for HKSV:', state);
+          this.recordingDelegate?.refreshPrebuffer();
+        },
+      },
+      {
+        type: 'boolean',
+        key: 'streamAsRequested',
+        title: 'Stream as requested',
+        description: 'Send live view in exactly the size, frame rate and bitrate HomeKit asks for. Every live stream is transcoded.',
+        group: 'Advanced',
+        defaultValue: false,
+        store: true,
+        onSet: async (state: boolean) => {
+          this.cameraLogger.log('Stream as requested:', state);
+        },
+      },
+      {
+        type: 'boolean',
         key: 'useHardwareAcceleration',
         title: 'Use Hardware Acceleration',
         description: 'When a live stream has to be transcoded, use the GPU for it if one is available. Streams HomeKit can play as they are go out without transcoding.',

@@ -1,3 +1,10 @@
+## [1.3.5]
+
+- **Transcoded live view on the classic path no longer blocks up or freezes.** Cameras that Home cannot play as they are, MJPEG or H.265 on the classic path, got the bitrate the Home app asks for, at best 300 kbit/s for 720p. Now the bitrate follows the picture size and frame rate, and the picture keeps the camera's aspect ratio. A lost packet froze the picture for up to 8 s. Now Home gets a new keyframe as soon as it reports the loss, and every 2 s anyway.
+- **Remote live view on the classic path starts on the small stream.** The Home app starts remote view with a small picture and asks for more once the connection holds. Cameras with a source in low or mid resolution now send that one first, transcoded to H.264 in the camera's aspect ratio when needed, and move to the main stream without a break. A slow connection no longer gets the full stream from the start.
+- **Remote live view on the Secure Video path keeps the camera's aspect ratio.** When the small stream came from a source with a different shape, a 4:3 substream next to a 16:9 main stream say, the Home app kept that shape after switching to the main stream. The small stream now takes the aspect ratio set in the camera's interface settings.
+- **New switches under Advanced, all off by default.** **Always transcode** transcodes live view even when Home could play the camera's stream as it is. **Stream as requested** sends live view in the size, frame rate and bitrate Home asks for. **Always transcode for HKSV** does the same for recordings, as H.264 in the format Home asks for.
+
 ## [1.3.4]
 
 - **Battery cameras can sleep.** HomeKit Secure Video only keeps a camera connected for the seconds before an event when hot mode is on for its main stream. Without hot mode, as plugins set it for battery cameras, a recording opens the stream when the event starts.
