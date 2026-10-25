@@ -2,10 +2,10 @@ github.com/bluenviron/gortsplib/v5 v5.6.0 h1:pLEIifcDFRCTMjXyppmXoYBF5Z0ct9Kyc0D
 github.com/bluenviron/gortsplib/v5 v5.6.0/go.mod h1:x2ULFBWPxZbuHjxNnGIBGr15O+/VB+p3TsJWQyshV50=
 github.com/bluenviron/mediacommon/v2 v2.9.0 h1:8gBeby10B/qD8ctnesKTHx3pgdsxiZcaQZe+RR6Djx4=
 github.com/bluenviron/mediacommon/v2 v2.9.0/go.mod h1:syqw4j2RmBCKZgUtGFtB/7gcnh1aaX8I3vd24+bgXWc=
-github.com/cameraui/rpc/go v1.1.1 h1:uraTdZCZVTT/qn61gzWcqdJAHfHK7oZHSlzU+TQcbLU=
-github.com/cameraui/rpc/go v1.1.1/go.mod h1:jXZOlI1AcFQSbjD+ltY3B6Y4IsMtWg5HPhdpy/r+qRA=
-github.com/cameraui/sdk/go v1.4.3 h1:YUjWjsgCoEWNPxd5nLPSbdbUQ60AJsBJRUhmdgVQ21M=
-github.com/cameraui/sdk/go v1.4.3/go.mod h1:pYSX/a+zSNT1yBaKTFx5U2LTz9WrNxOfTHdpAyzEjhw=
+github.com/cameraui/rpc/go v1.1.2 h1:DeXmGWMGIfseRibtpM3C6HmGtCb2nE5nzNO6E1i218o=
+github.com/cameraui/rpc/go v1.1.2/go.mod h1:I+p4LrtKYRNsTpDWmbEBS4GI5754Yjoc0vSf5ow/sMc=
+github.com/cameraui/sdk/go v1.4.4 h1:tEPjMxUibzUOETPoI52vV2nI7+p5xEwOq2Sh/4pOgGY=
+github.com/cameraui/sdk/go v1.4.4/go.mod h1:+lZ+RRpZEbivYDHTDkhSPmGWMc31sy7le5/wgdc3S5U=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
@@ -14,8 +14,8 @@ github.com/gorilla/websocket v1.5.3 h1:saDtZ6Pbx/0u+bgYQ3q96pZgCzfhKXGPqt7kZ72aN
 github.com/gorilla/websocket v1.5.3/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/klauspost/compress v1.20.0 h1:a3C1ke2ohxFymNlb2HWAHjDeKCI90scRskErZkR0ezA=
 github.com/klauspost/compress v1.20.0/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
-github.com/nats-io/nats.go v1.54.0 h1:vsXoOxjHp/GmPUN+EcI7uOf/uB+iAP+kEsAFNQN0yzA=
-github.com/nats-io/nats.go v1.54.0/go.mod h1:y+DZoD1oBOYfZTU681eTUiUjI0vbqYGixNVFHcjHJ0k=
+github.com/nats-io/nats.go v1.55.0 h1:Ng8QKHdvdHIWoaiq0+d/aH1BWkxvcJxWJ0Y/9BPKx3M=
+github.com/nats-io/nats.go v1.55.0/go.mod h1:y+DZoD1oBOYfZTU681eTUiUjI0vbqYGixNVFHcjHJ0k=
 github.com/nats-io/nkeys v0.4.16 h1:rd5oAuLOb8mnAycB0xleuEBNS1pVVnN0fv/FF34Eypg=
 github.com/nats-io/nkeys v0.4.16/go.mod h1:llLgWoI0o4z/Q57q2R1kHfmocyhGV6VG/U18Glg1Afs=
 github.com/nats-io/nuid v1.0.1 h1:5iA8DT8V7q8WK2EScv2padNa/rTESc1KdnPw4TC2paw=

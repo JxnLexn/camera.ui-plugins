@@ -25,11 +25,11 @@
     "chacha": "^2.1.0",
     "pick-port": "^2.2.1",
     "save": "^2.9.0",
-    "werift": "^0.25.1"
+    "werift": "^0.25.2"
   },
   "devDependencies": {
-    "@camera.ui/cli": "^0.0.118",
-    "@camera.ui/sdk": "^1.4.3",
+    "@camera.ui/cli": "^0.0.119",
+    "@camera.ui/sdk": "^1.4.4",
     "@stylistic/eslint-plugin": "^5.10.0",
     "@types/node": "26.6.5",
     "@typescript-eslint/parser": "^8.72.0",
@@ -48,7 +48,7 @@
     "url": "https://github.com/cameraui/plugins/issues"
   },
   "engines": {
-    "camera.ui": ">=2.4.0",
+    "camera.ui": ">=2.4.2",
     "node": ">=24.5.0"
   },
   "os": [],
